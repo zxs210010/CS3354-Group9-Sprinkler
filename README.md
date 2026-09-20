@@ -3,3 +3,4 @@ Zachary Sherrell
 Michael Cat
 Joshua Borgueta
 Cole Franks
+Paul Peters
