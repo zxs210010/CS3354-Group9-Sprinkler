@@ -1,4 +1,4 @@
-Michael Cat:
+Michael Cat: Customize UI, Sprinkler Toggling Inputs
 SprinklerCard.tsx creates the card that will be displayed in testBoard.tsx, where theres 2 switches for manual ON/OFF, and Auto ON/OFF. 
 testBoard.tsx implements an array of panels where displays can be interchanged through a dropdown menu, panels are added to the array through addPanel, 
 a paintbucket tool is also added where it creates a dropdwon panel to change the background color
