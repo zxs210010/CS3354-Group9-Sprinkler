@@ -3,3 +3,7 @@ SprinklerCard.tsx creates the card that will be displayed in testBoard.tsx, wher
 testBoard.tsx implements an array of panels where displays can be interchanged through a dropdown menu, panels are added to the array through addPanel, 
 a paintbucket tool is also added where it creates a dropdwon panel to change the background color
 All interactables are used along with React.FC
+
+Joshua Borgueta: Setting Notification Time, Modifying Notification Settings
+SetNotificationTime.py sets and saves the notification time.
+SelectPreferNotifications.py edits and modifies notification settings, as well as enabling and disabling activation.
