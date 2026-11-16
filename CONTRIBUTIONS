@@ -19,3 +19,9 @@ Cole Franks: Create Account, Daily Settings
 create_account.py handles user registration, input validation, and inserts new user credentials into a SQL database.
 daily_settings.py manages daily watering schedule preferences, client-side tab state memory, and overwrites daily settings in a SQL database.
 both have their own HTML pages that link to the modules and send inputs to them.
+
+Diep Tran: Add Prefer Time, Connect Sprinkler, Change Sprinkler, Display Advice
+sprinkler_service.py: handles adding new sprinkler, removing sprinkler, editing sprinkler's name
+watering_advisor.py: based on criteria (soil_moisture, forecase_rain in mm, and rain_probability), calculate whether the user should water their lawn that day, then print back to the user the decision. If their soil's water content is high -> no need for watering, if there's a high probability of rain or heavy rain later on -> hold on the watering, and for invalid or missing information, output to tell the user which data is missing.
+watering_schedule.py: allows users to input their preferred time for daily watering, as well as auto change the schedule for daylight savings time adjustment
+
