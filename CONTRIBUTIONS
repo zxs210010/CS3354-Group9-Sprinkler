@@ -7,3 +7,11 @@ All interactables are used along with React.FC
 Joshua Borgueta: Setting Notification Time, Modifying Notification Settings
 SetNotificationTime.py sets and saves the notification time.
 SelectPreferNotifications.py edits and modifies notification settings, as well as enabling and disabling activation.
+
+Paul Peters: Location Geocoding, Weather API
+weather_service.py takes the user's city and optional country code and converts it into latitude and longitude using the Open-Meteo Geocoding API.
+The coordinates are then used to retrieve current weather conditions and a three-day forecast from the Open-Meteo Weather API.
+weather_service.py organizes the weather data, including temperature, humidity, precipitation, and evapotranspiration, into a structured format that can be used by other modules for watering recommendations.
+test_weather.py contains three automated unit tests to verify the weather module's functionality.
+The module also handles invalid city inputs by displaying an error message when a location cannot be found.
+
