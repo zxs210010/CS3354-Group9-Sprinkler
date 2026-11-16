@@ -15,3 +15,7 @@ weather_service.py organizes the weather data, including temperature, humidity, 
 test_weather.py contains three automated unit tests to verify the weather module's functionality.
 The module also handles invalid city inputs by displaying an error message when a location cannot be found.
 
+Cole Franks: Create Account, Daily Settings
+create_account.py handles user registration, input validation, and inserts new user credentials into a SQL database.
+daily_settings.py manages daily watering schedule preferences, client-side tab state memory, and overwrites daily settings in a SQL database.
+both have their own HTML pages that link to the modules and send inputs to them.
