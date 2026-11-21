@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Home</title>
+  <style>
+    body {
+      min-height: 100vh;
+      margin: 0;
+      display: grid;
+      place-items: center;
+      background: #f4f7fb;
+      color: #172033;
+      font-family: system-ui, sans-serif;
+    }
+
+    main {
+      max-width: 36rem;
+      padding: 2rem;
+      text-align: center;
+    }
+
+    h1 {
+      margin-bottom: 0.5rem;
+    }
+
+    p {
+      color: #64748b;
+    }
+
+    nav a {
+      margin: 0 0.5rem;
+      color: #2563eb;
+    }
+
+    .flash {
+      background: #dbeafe;
+      color: #1e3a8a;
+      padding: 0.75rem 1rem;
+      border-radius: 0.5rem;
+      margin-bottom: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    {% with messages = get_flashed_messages() %}
+      {% for message in messages %}
+        <div class="flash">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
+
+    <h1>Welcome</h1>
+    <p>Your home page is ready.</p>
+
+    <nav>
+      <a href="{{ url_for('login') }}">Login</a>
+      <a href="{{ url_for('profile', user_id=1) }}">Profile</a>
+      <a href="{{ url_for('location', user_id=1) }}">Location</a>
+    </nav>
+  </main>
+</body>
+</html>
