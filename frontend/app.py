@@ -6,7 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.append(str(ROOT))
 
-from dashboard_layout import get_layout_key, save_layout_key
+from uicustom.dashboard_layout import get_layout_key, save_layout_key
 from create_account import get_user_by_id, AccountError, create_user, verify_login
 
 from flask import Flask, render_template, request, redirect, session, url_for, flash
