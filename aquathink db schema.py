@@ -1,0 +1,132 @@
+import json
+import os
+import requests
+
+ACCOUNT_ID = "0a1f0d7a2efde9dc6f7f86b125bfa23b"
+DATABASE_ID = "1a23b01a-fa14-4dae-b1f5-89523e281414"
+TOKEN = os.environ["CF_API_TOKEN"]
+
+SQL = """
+CREATE TABLE IF NOT EXISTS users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  email TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS locations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+  city TEXT NOT NULL,
+  state TEXT,
+  country TEXT,
+  country_code TEXT,
+  latitude REAL NOT NULL,
+  longitude REAL NOT NULL,
+  timezone TEXT NOT NULL DEFAULT 'America/Chicago',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS sprinklers (
+  serial_number TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS watering_schedules (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  watering_time TEXT NOT NULL,
+  timezone TEXT NOT NULL DEFAULT 'America/Chicago',
+  is_enabled INTEGER NOT NULL DEFAULT 1,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS daily_settings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  day_of_week TEXT NOT NULL,
+  max_water_gallons INTEGER NOT NULL DEFAULT 0,
+  max_duration_min INTEGER NOT NULL DEFAULT 0,
+  UNIQUE(user_id, day_of_week)
+);
+
+CREATE TABLE IF NOT EXISTS notification_settings (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  is_enabled INTEGER NOT NULL DEFAULT 0,
+  notification_time TEXT,
+  timezone TEXT NOT NULL DEFAULT 'America/Chicago',
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS weather_snapshots (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  observed_at TEXT NOT NULL,
+  temperature_c REAL,
+  humidity_percent REAL,
+  current_precipitation_mm REAL,
+  soil_moisture_fraction REAL,
+  raw_json TEXT,
+  fetched_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS weather_forecasts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  forecast_date TEXT NOT NULL,
+  precipitation_sum_mm REAL,
+  precipitation_probability_max REAL,
+  et0_mm REAL,
+  temperature_max_c REAL,
+  temperature_min_c REAL,
+  fetched_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS watering_recommendations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sprinkler_serial TEXT REFERENCES sprinklers(serial_number) ON DELETE CASCADE,
+  weather_snapshot_id INTEGER REFERENCES weather_snapshots(id) ON DELETE SET NULL,
+  generated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  soil_moisture_fraction REAL,
+  forecast_rain_mm REAL,
+  rain_probability REAL,
+  decision TEXT NOT NULL,
+  reason TEXT
+);
+
+CREATE TABLE IF NOT EXISTS watering_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sprinkler_serial TEXT NOT NULL REFERENCES sprinklers(serial_number) ON DELETE CASCADE,
+  started_at TEXT NOT NULL,
+  ended_at TEXT,
+  duration_min INTEGER,
+  gallons_used REAL,
+  trigger TEXT NOT NULL DEFAULT 'schedule',
+  status TEXT NOT NULL DEFAULT 'completed'
+);
+
+CREATE TABLE IF NOT EXISTS dashboard_layouts (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  layout_key TEXT NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_sprinklers_user ON sprinklers(user_id);
+CREATE INDEX IF NOT EXISTS idx_weather_snapshots_loc_time ON weather_snapshots(location_id, observed_at);
+CREATE INDEX IF NOT EXISTS idx_weather_forecasts_loc_date ON weather_forecasts(location_id, forecast_date);
+CREATE INDEX IF NOT EXISTS idx_recs_sprinkler_time ON watering_recommendations(sprinkler_serial, generated_at);
+CREATE INDEX IF NOT EXISTS idx_events_sprinkler_time ON watering_events(sprinkler_serial, started_at);
+"""
+
+resp = requests.post(
+    f"https://api.cloudflare.com/client/v4/accounts/{ACCOUNT_ID}/d1/database/{DATABASE_ID}/query",
+    headers={"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"},
+    json={"sql": SQL},
+    timeout=60,
+)
+print(resp.status_code)
+print(json.dumps(resp.json(), indent=2))
