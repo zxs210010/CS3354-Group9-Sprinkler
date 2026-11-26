@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en" style="--c1: {{layout.c1}}; --c2: {{layout.c2}};">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboard</title>
+<!-------------------- Basic Dashboard ----------------------------------------->
+<style>
+    :root { --c1: #c5d4fb; --c2: #177858;
+            --bg: linear-gradient(135deg, var(--c1), var(--c2)); }
+    body { margin: 0; background: #ba5555; display: flex; justify-content: center;
+           height: 100vh; height: 100dvh; overflow: hidden; font-family: system-ui, sans-serif; }
+    .screen { width: 100%; height: 100%;
+              padding: 2vh 30px; box-sizing: border-box;
+              display: flex; flex-direction: column;
+              background: var(--bg); }
+    .logo { display: block; height: 12vh; width: auto; margin: 0 auto 2vh; flex: none; }
+    .panels { flex: 1; min-height: 0; display: grid; gap: 2vh 2vw; 
+    grid-template-columns: repeat(2, 1fr); grid-auto-rows: 1fr; }
+    .panel { background: #d9d9d9; min-height: 0; min-width: 0; 
+             position: relative; overflow: hidden; }
+    
+    .hud-button { position: fixed; top: 2vh; left: 16px; z-index: 30;
+      width: 44px; height: 44px; border-radius: 8px;
+      background: #000; color: #fff; font-size: 24px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; user-select: none; }
+
+    .hud { position: fixed; top: 0; left: 0; height: 100%;
+        width: 280px; max-width: 80vw; box-sizing: border-box;
+        padding: 70px 20px 20px; background: #fff; z-index: 20;
+        display: flex; flex-direction: column; gap: 14px;
+        transform: translateX(-100%); transition: transform .25s ease; }
+    .hud h2 { margin: 0 0 10px; }
+    .hud a { color: #000; text-decoration: none; font-size: 20px; padding: 8px 0; }
+    .hud a:hover { text-decoration: underline; }
+
+    .hud-backdrop { position: fixed; inset: 0; z-index: 10;
+            background: rgba(0,0,0,.4); opacity: 0; 
+            pointer-events: none; transition: opacity .25s ease; }
+
+#hud-toggle:checked ~ .hud { transform: translateX(0); }
+#hud-toggle:checked ~ .hud-backdrop { opacity: 1; pointer-events: auto; }
+</style>
+<!----------------------- Side HUD ---------------------------------------------->
+</head>
+<input type="checkbox" id="hud-toggle" hidden>
+<label for="hud-toggle" class="hud-button" aria-label="Toggle menu">☰</label>
+<label for="hud-toggle" class="hud-backdrop"></label>
+
+<aside class="hud">
+    <h2>Menu</h2>
+    <a href="{{ url_for('dashboard', user_id=dashboard.id) }}">Dashboard</a>
+    <a href="{{ url_for('edit_dash', user_id=dashboard.id) }}">Edit dashboard</a>
+    <a href="{{ url_for('profile', user_id=dashboard.id) }}">Profile</a>
+    <a href="{{ url_for('location', user_id=dashboard.id) }}">Location</a>
+</aside>
+<!-------------------- Panels + Logo ------------------------------------->
+<body data-user-id="{{ dashboard.id }}">
+    <div class="screen">
+        <img class="logo" src="{{ url_for('static', filename='aquathinklogo.png') }}" alt="Aqua think">
+        <div class="panels">
+            {% for d in layout.panels %}
+            <div class="panel">
+                {% if d %}
+                    {% include "cards/" ~ (d|lower) ~ ".html" ignore missing%}
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</body>
+</html>

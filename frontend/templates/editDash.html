@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboard</title>
+<style>
+  :root { --c1: #c5d4fb; --c2: #177858; 
+          --bg: linear-gradient(135deg, var(--c1), var(--c2)); }
+  body { margin: 0; background: #ba5555; display: flex; justify-content: center;
+         height: 100vh; height: 100dvh; overflow: hidden; font-family: system-ui, sans-serif; }
+  .screen { width: 100%; height: 100%;
+            padding: 2vh 30px 90px; box-sizing: border-box;
+            display: flex; flex-direction: column;
+            background: var(--bg); position: relative; }
+  .logo { display: block; height: 12vh; width: auto; margin: 0 auto 2vh; flex: none; }
+  .panels { flex: 1; min-height: 0; display: grid; gap: 2vh 2vw; 
+            grid-template-columns: repeat(2, 1fr); grid-auto-rows: 1fr; }
+  .panel { position: relative; overflow: hidden; background: #d9d9d9; min-height: 0; min-width: 0; }
+  
+  .panel select { font-size: 28px; padding: 4px 8px; border: none; background: #fff; }  
+  .panel.has-card select { position: absolute; left: 8px; bottom: 8px; z-index: 2;
+                  font-size: 14px; padding: 3px 6px; opacity: .85; }
+  
+  
+  .label { margin-top: 18px; font-size: 26px; color: #333; }
+  #c1, #c2 { position: absolute; top: 18px; width: 44px; height: 44px; padding: 0; border: none; }  
+  #c1 { right: 80px; }
+  #c2 { right: 30px; }
+  #add { position: absolute; right: 50px; bottom: 20px; width: 48px; height: 48px;
+         border: none; border-radius: 8px; background: #000; color: #fff; font-size: 32px; cursor: pointer; }
+  #save { position: absolute; right: 110px; bottom: 20px;
+        height: 48px; padding: 0 20px;
+        border: none; border-radius: 8px;
+        background: #000; color: #fff;
+        font-size: 20px; cursor: pointer; }
+  #save:hover { background: #333; }
+  #discard { position: absolute; left: 80px; bottom: 20px;
+        height: 48px; padding: 0 20px;
+        border: none; border-radius: 8px;
+        background: #000; color: #fff;
+        font-size: 20px; cursor: pointer; }
+  #discard:hover { background: #333; }
+</style>
+</head>
+<!-------------------- Inputs  Setup ----------------------------------------->
+<body data-user-id="{{ dashboard.id }}">
+  <div id="card-source" hidden>
+    {% include "cards/sprinkler.html" %}
+  </div>
+  <div class="screen" id="screen">
+    <img class="logo" src="{{ url_for('static', filename='aquathinklogo.png') }}" alt="Aqua think">
+    <input type="color" id="c1" value="#c5d4fb" title="Start colour">
+    <input type="color" id="c2" value="#177858" title="End colour">
+
+    <div class="panels" id="panels">
+      <div class="panel"></div>
+      <div class="panel"></div>
+      <div class="panel"></div>
+      <div class="panel"></div>
+    </div>
+
+    <button id="save" type="button" data-url="{{ url_for('dashboard', user_id=dashboard.id) }}">Save changes</button>
+    <button id="discard" type="button" data-url="{{ url_for('dashboard', user_id=dashboard.id) }}">Discard changes</button>
+    <button id="add" type="button" aria-label="Add panel">+</button>
+  </div>
+<!-------------------- Editing Functions ----------------------------------------->
+<script>
+  const options = ["Sprinkler", "Clock", "Weather", "Calendar", "Reports"];
+
+  const cards = { Sprinkler: ".sprinkler" };
+
+  function setupPanel(panel) {
+    const select = document.createElement("select");
+    select.add(new Option("choose Display", ""))
+
+    options.forEach(o => select.appendChild(new Option(o, o)));
+
+    const label = document.createElement("div");
+    label.className = "label";
+
+    let shown = null;
+
+    select.onchange = () => {
+      if (shown) { shown.remove(); shown = null; }
+
+      const selector = cards[select.value];
+      const source = selector && document.querySelector("#card-source " + selector);
+
+      panel.classList.toggle("has-card", !!source);
+      if (source) {
+        shown = source.cloneNode(true);
+        panel.append(shown);
+        label.textContent = "";
+      } else {
+        label.textContent = select.value;
+      }
+    };
+    panel.append(select, label);
+  }
+
+  function setGradient() {
+    const root = document.documentElement;
+    root.style.setProperty("--c1", document.getElementById("c1").value);
+    root.style.setProperty("--c2", document.getElementById("c2").value);
+  }
+  document.getElementById("c1").oninput = setGradient;
+  document.getElementById("c2").oninput = setGradient;
+
+  document.getElementById("save").onclick = e => {
+  const c1 = document.getElementById("c1").value.slice(1);   // drop the "#"
+  const c2 = document.getElementById("c2").value.slice(1);
+  const panels = [...document.querySelectorAll(".panel select")].map(s => s.value);
+
+  const key = [c1, c2, panels.join(",")].join(";");
+  location.href = e.target.dataset.url + "?key=" + encodeURIComponent(key);
+  };
+  document.getElementById("discard").onclick = e => location.href = e.target.dataset.url;
+
+  document.querySelectorAll(".panel").forEach(setupPanel);
+
+  document.getElementById("add").onclick = () => {
+    const panel = document.createElement("div");
+    panel.className = "panel";
+    setupPanel(panel);
+    document.getElementById("panels").appendChild(panel);
+  };
+
+</script>
+</body>
+</html>
