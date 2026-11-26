@@ -45,7 +45,8 @@ def dashboard(user_id):
 
 @app.route("/user/<string:user_id>/editDash")
 def edit_dash(user_id):
-    return render_template("editDash.html", dashboard={"id": user_id})
+    layout = decode_key(session.get(f"layout_{user_id}", ""))
+    return render_template("editDash.html", dashboard={"id": user_id}, layout=layout)
 
 @app.route("/user/<string:user_id>/profile")
 def profile(user_id):

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" style="--c1: {{layout.c1}}; --c2: {{layout.c2}};">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -50,14 +50,13 @@
   </div>
   <div class="screen" id="screen">
     <img class="logo" src="{{ url_for('static', filename='aquathinklogo.png') }}" alt="Aqua think">
-    <input type="color" id="c1" value="#c5d4fb" title="Start colour">
-    <input type="color" id="c2" value="#177858" title="End colour">
+    <input type="color" id="c1" value="#{{layout.c1[1:]}}" title="Start colour">
+    <input type="color" id="c2" value="#{{layout.c2[1:]}}" title="End colour">
 
     <div class="panels" id="panels">
-      <div class="panel"></div>
-      <div class="panel"></div>
-      <div class="panel"></div>
-      <div class="panel"></div>
+      {% for d in layout.panels %}
+      <div class="panel" data-value="{{ d }}"></div>
+      {% endfor %}
     </div>
 
     <button id="save" type="button" data-url="{{ url_for('dashboard', user_id=dashboard.id) }}">Save changes</button>
@@ -71,20 +70,20 @@
   const cards = { Sprinkler: ".sprinkler" };
 
   function setupPanel(panel) {
-    const select = document.createElement("select");
-    select.add(new Option("choose Display", ""))
-
-    options.forEach(o => select.appendChild(new Option(o, o)));
+    const picker = document.createElement("select");
+    picker.add(new Option("choose Display", ""))
+    options.forEach(o => picker.appendChild(new Option(o, o)));
+    picker.value = panel.dataset.value || "";
 
     const label = document.createElement("div");
     label.className = "label";
 
     let shown = null;
 
-    select.onchange = () => {
+    picker.onchange = () => {
       if (shown) { shown.remove(); shown = null; }
 
-      const selector = cards[select.value];
+      const selector = cards[picker.value];
       const source = selector && document.querySelector("#card-source " + selector);
 
       panel.classList.toggle("has-card", !!source);
@@ -93,10 +92,11 @@
         panel.append(shown);
         label.textContent = "";
       } else {
-        label.textContent = select.value;
+        label.textContent = picker.value;
       }
     };
-    panel.append(select, label);
+    panel.append(picker, label);
+    picker.onchange();
   }
 
   function setGradient() {
