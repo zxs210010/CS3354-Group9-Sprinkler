@@ -5,6 +5,31 @@ from flask import Flask, render_template, request, redirect, session, url_for, f
 app = Flask(__name__)
 app.secret_key = "change-this-to-a-random-string"  
 
+@app.route("/")
+def home():
+    return render_template("home.html")
+
+from create_account import AccountError, create_user, verify_login
+
+AUTH_PAGES = {
+    "login": {"title": "Login", "button": "Sign In"},
+    "register": {"title": "Register", "button": "Create Account"}
+}
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    return render_template("login", verify_login)
+
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    return render_template("register", create_user)
+
+@app.route("/logout")
+def logout():
+    session.pop("user_id", None)
+    return redirect(url_for("login"))
+
 OPTIONS = ["Sprinkler", "Clock", "Weather", "Calendar", "Reports"]
 DEFAULT_LAYOUT = {"c1": "#c5d4fb", "c2": "#177858", "panels": ["Sprinkler", "Clock", "Calendar", "Reports"]}
 
@@ -17,16 +42,6 @@ def decode_key(key):
         return DEFAULT_LAYOUT
     panels = [p if p in OPTIONS else "" for p in panels.split(",")][:20]
     return {"c1": "#" + c1, "c2": "#" + c2, "panels": panels}
-    
-
-@app.route("/")
-def home():
-    return render_template("home.html")
-
-
-@app.route("/login")
-def login():
-    return render_template("login.html")
 
 @app.route("/user/<string:user_id>/dashboard")
 def dashboard(user_id):
@@ -73,14 +88,9 @@ def location(user_id):
     }
     return render_template("location.html", location=user_location, user_id=user_id)
 
-@app.route("/user/<string:user_id>/admin")
-def admin_panel(user_id):       
-    user_admin = {
-        "id": user_id,
-        "username": "JohnDoe",
-        "email": "johndoe@example.com",
-    }
-    return render_template("admin.html", admin=user_admin)
+@app.route("/admin")
+def admin_panel():       
+    return render_template("admin.html")
 
 
 

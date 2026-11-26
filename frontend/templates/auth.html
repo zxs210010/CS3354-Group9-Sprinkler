@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}{{ page.title }}{% endblock %}
+{% block body_class %}auth{% endblock %}
+
+{% block content %}
+<form method="post">
+    <img class="logo" src="{{ url_for('static', filename='aquathinklogo.png') }}" alt="Aqua think">
+    <h1>{{ page.title }}</h1>
+
+    {% for m in get_flashed_messages() %}<div class="msg">{{ m }}</div>{% endfor %}
+
+    <label for="email">Email</label>
+    <input id="email" name="email" type="email" placeholder="name@example.com" required>
+
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" required
+           autocomplete="{{ page.autocomplete }}" minlength="{{ page.minlength }}">
+
+    <button type="submit">{{ page.button }}</button>
+    <p class="alt">
+        {% if name == "login" %}
+            No account? <a href="{{ url_for('register') }}">Register</a>
+        {% else %}
+            Already have an account? <a href="{{ url_for('login') }}">Sign in</a>
+        {% endif %}
+    </p>
+</form>
+{% endblock %}
