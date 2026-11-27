@@ -1,12 +1,12 @@
-<div class="nextrun">
+<div class="nextrun" data-sched='{{ sched_data | tojson }}'>
   <div class="nextrun-title">Next Activation</div>
-  <div class="nextrun-when">{{ next_run.label if next_run else "Nothing scheduled" }}</div>
+  <div class="nextrun-when">Nothing scheduled</div>
 
   <form class="nextrun-edit" method="post" action="{{ url_for('update_time', user_id=dashboard.id) }}">
     <label for="nextrun-time">Start time</label>
     <div class="nextrun-row">
       <input id="nextrun-time" type="time" name="watering_time"
-             value="{{ next_run.time if next_run else '06:00' }}" required>
+             value="{{ sched_data.time if sched_data else '06:00' }}" required>
       <button type="submit">Save</button>
     </div>
   </form>
@@ -35,3 +35,88 @@
 
   .nextrun-full { align-self: flex-end; color: #000; font-size: clamp(11px, 4cqw, 20px); }
 </style>
+
+<script>
+// Client-side time helpers. The server only stores the start time (HH:MM) and a
+// timezone name as plain text; everything about "now" is worked out here.
+(function () {
+  if (window.AquaTime) return;
+
+  const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+  const FALLBACK_ZONES = [
+    "America/New_York", "America/Chicago", "America/Denver", "America/Phoenix",
+    "America/Los_Angeles", "America/Anchorage", "Pacific/Honolulu", "America/Toronto",
+    "America/Mexico_City", "Europe/London", "Europe/Paris", "Europe/Berlin",
+    "Asia/Kolkata", "Asia/Tokyo", "Australia/Sydney", "UTC"
+  ];
+
+  function browserTz() {
+    try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch (e) { return undefined; }
+  }
+
+  // returns a usable timezone name, or undefined (= the browser's own timezone)
+  function safeTz(tz) {
+    if (!tz) return undefined;
+    try { new Intl.DateTimeFormat("en-US", { timeZone: tz }); return tz; } catch (e) { return undefined; }
+  }
+
+  function timezones() {
+    try {
+      if (Intl.supportedValuesOf) return Intl.supportedValuesOf("timeZone");
+    } catch (e) {}
+    return FALLBACK_ZONES;
+  }
+
+  function nowIn(tz) {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz, weekday: "long", hour: "numeric", minute: "numeric", hour12: false
+    }).formatToParts(new Date());
+    const get = type => parts.find(p => p.type === type).value;
+    return {
+      weekday: DAY_NAMES.indexOf(get("weekday")),
+      minutes: (parseInt(get("hour"), 10) % 24) * 60 + parseInt(get("minute"), 10)
+    };
+  }
+
+  function fmt(hh, mm) {
+    return (hh % 12 || 12) + ":" + String(mm).padStart(2, "0") + " " + (hh < 12 ? "AM" : "PM");
+  }
+
+  // data = { enabled, time: "HH:MM", timezone, offDays: [0..6, Monday = 0] }
+  function nextWatering(data) {
+    if (!data || !data.enabled || !data.time) return null;
+    const [hh, mm] = data.time.split(":").map(Number);
+    if (isNaN(hh) || isNaN(mm)) return null;
+
+    const target = hh * 60 + mm;
+    const now = nowIn(safeTz(data.timezone));
+    const off = data.offDays || [];
+
+    for (let offset = 0; offset < 8; offset++) {
+      if (offset === 0 && target <= now.minutes) continue;   // today's run already passed
+      const weekday = (now.weekday + offset) % 7;
+      if (off.includes(weekday)) continue;                    // this weekday is turned off
+      const when = offset === 0 ? "Today" : offset === 1 ? "Tomorrow" : DAY_NAMES[weekday];
+      return when + " at " + fmt(hh, mm);
+    }
+    return null;
+  }
+
+  window.AquaTime = { browserTz, safeTz, timezones, nextWatering };
+})();
+</script>
+<script>
+  if (!window.nextrunReady) {
+    window.nextrunReady = true;
+    function nextrunTick() {
+      document.querySelectorAll(".nextrun").forEach(card => {
+        let data = null;
+        try { data = JSON.parse(card.dataset.sched || "null"); } catch (e) {}
+        card.querySelector(".nextrun-when").textContent =
+          AquaTime.nextWatering(data) || "Nothing scheduled";
+      });
+    }
+    nextrunTick();
+    setInterval(nextrunTick, 1000);
+  }
+</script>

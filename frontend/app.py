@@ -247,11 +247,6 @@ def profile(user_id):
     layout = decode_key(get_layout_key(uid))
     return render_template("profile.html", profile=user, layout=layout)
 
-@app.route("/user/<string:user_id>/profile/account")
-@login_required
-def account_settings(user_id):
-    return "In Development"
-
 @app.route("/user/<string:user_id>/notifications", methods=["POST"])
 @login_required
 def notifications(user_id):
