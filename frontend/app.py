@@ -194,7 +194,7 @@ def schedule(user_id):
             flash(result)
             return redirect(url_for("schedule", user_id=uid))
 
-        store_schedule(uid, draft["watering_time"], clean.tz(request.form.get("timezone")),
+        store_schedule(uid, draft["watering_time"], clean_tz(request.form.get("timezone")),
                         request.form.get("is_enabled") == "on")
 
         for day in DAYS:
@@ -246,6 +246,7 @@ def profile(user_id):
     user = get_user_by_id(uid)
     layout = decode_key(get_layout_key(uid))
     return render_template("profile.html", profile=user, layout=layout)
+
 
 @app.route("/user/<string:user_id>/notifications", methods=["POST"])
 @login_required
