@@ -1,5 +1,5 @@
 import unittest
-from watering_advisor import recommend_watering
+from backend.watering_advisor import recommend_watering
 
 
 class WateringAdvisorTests(unittest.TestCase):
