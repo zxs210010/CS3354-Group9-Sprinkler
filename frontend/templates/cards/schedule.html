@@ -1,7 +1,7 @@
 <div class="nextrun" data-sched='{{ sched_data | tojson }}'>
   <div class="nextrun-title">Watering Schedule</div>
   <div class="nextrun-list"></div>
-  <a class="nextrun-full" href="{{ url_for('schedule', user_id=dashboard.id) }}">Edit schedule</a>
+  <a class="nextrun-full" href="{{ url_for('schedule', user_id=dashboard.id) }}">Edit</a>
 </div>
 
 <style>
@@ -13,14 +13,18 @@
   .nextrun-title { font-size: clamp(16px, 8cqw, 44px); }
 
   .nextrun-list { flex: 1; min-height: 0; overflow: hidden; display: grid; align-content: start;
-                  gap: .3em .8em; font-size: clamp(12px, 5.2cqw, 28px); }
+                  gap: .3em .8em; font-size: clamp(12px, 5.2cqw, 28px);
+                  padding-bottom: 14%; }
   .nextrun-list.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .nextrun-item { display: flex; justify-content: space-between; gap: .6em; padding: .2em .6em;
                   background: rgba(255,255,255,.55); border-radius: 6px; white-space: nowrap; }
   .nextrun-item span:first-child { font-weight: 700; }
   .nextrun-empty { opacity: .7; }
 
-  .nextrun-full { align-self: flex-end; color: #000; font-size: clamp(11px, 4cqw, 20px); }
+  .nextrun-full { position: absolute; right: 5%; bottom: 5%; background: #000; color: #fff;
+                  text-decoration: none; border-radius: 8px; padding: .4em 1em;
+                  font-size: clamp(13px, 5cqw, 26px); }
+  .nextrun-full:hover { background: #333; }
 </style>
 
 <script>
