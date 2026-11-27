@@ -1,4 +1,4 @@
-<div class="nextrun" data-sched='{{ sched_data | tojson }}'>
+<div class="nextrun" data-sched='{{ sched_data if sched_data is defined else none | tojson }}'>
   <div class="nextrun-title">Next Activation</div>
   <div class="nextrun-when">Nothing scheduled</div>
 

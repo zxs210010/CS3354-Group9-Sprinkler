@@ -178,7 +178,7 @@ def edit_dash(user_id):
     uid = session["user_id"]
     layout = decode_key(get_layout_key(uid))
     return render_template("editDash.html", dashboard={"id": user_id}, layout=layout,
-                           next_run=next_watering(uid))
+                           next_run=schedule_data(uid))
 
 
 # Watering Schedule page
