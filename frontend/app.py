@@ -78,7 +78,7 @@ def logout():
 
 
 # Customize UI Key
-OPTIONS = ["Sprinkler", "Clock", "Weather", "Calendar", "Reports"]
+OPTIONS = ["Sprinkler", "Clock", "Weather", "Schedule", "Reports"]
 DEFAULT_LAYOUT = {"c1": "#c5d4fb", "c2": "#177858",
                   "panels": ["Sprinkler", "Clock", "Calendar", "Reports"]}
 
@@ -145,7 +145,8 @@ def next_watering(uid):
         when = "Today" if offset == 0 else "Tomorrow" if offset == 1 else run.strftime("%A")
         time_str = run.strftime("%I:%M %p").lstrip("0")
         return {"label": f"{when} at {time_str}", "timezone": SCHEDULE_TZ}
-    return None
+    return {"label": f"{when} at {time_str}", "timezone": SCHEDULE_TZ,
+        "time": f"{hh:02d}:{mm:02d}"}
 
 
 def to_int(value, default=0, maximum=10000):
@@ -205,7 +206,7 @@ def schedule(user_id):
             set_daily_setting(uid, day, gallons, minutes)
 
         flash("Schedule updated successfully.")
-        return redirect(url_for("schedule", user_id=uid))
+        return redirect(url_for("dashboard", user_id=uid))
 
     sched = load_schedule(uid) or {"watering_time": "06:00", "is_enabled": 1}
     saved = get_daily_settings(uid)
@@ -223,6 +224,20 @@ def schedule(user_id):
     return render_template("schedule.html", dashboard={"id": uid}, sched=sched,
                            days=days, timezone=SCHEDULE_TZ, next_run=next_watering(uid))
 
+@app.route("/user/<string:user_id>/schedule/time", methods=["POST"])
+@login_required
+def update_time(user_id):
+    uid = session["user_id"]
+    draft = {}
+    result = set_watering_time(draft, request.form.get("watering_time", ""))
+    if result != "Watering time updated successfully":
+        flash(result)
+        return redirect(url_for("schedule", user_id=uid))
+
+    current = load_schedule(uid)
+    enabled = bool(current["is_enabled"]) if current else True
+    store_schedule(uid, draft["watering_time"], enabled)
+    return redirect(url_for("dashboard", user_id=uid))
 
 # In Progress
 @app.route("/user/<string:user_id>/profile")

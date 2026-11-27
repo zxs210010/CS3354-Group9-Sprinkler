@@ -1,0 +1,37 @@
+<div class="nextrun">
+  <div class="nextrun-title">Next Activation</div>
+  <div class="nextrun-when">{{ next_run.label if next_run else "Nothing scheduled" }}</div>
+
+  <form class="nextrun-edit" method="post" action="{{ url_for('update_time', user_id=dashboard.id) }}">
+    <label for="nextrun-time">Start time</label>
+    <div class="nextrun-row">
+      <input id="nextrun-time" type="time" name="watering_time"
+             value="{{ next_run.time if next_run else '06:00' }}" required>
+      <button type="submit">Save</button>
+    </div>
+  </form>
+
+  <a class="nextrun-full" href="{{ url_for('schedule', user_id=dashboard.id) }}">Full schedule</a>
+</div>
+
+<style>
+  .nextrun { position: absolute; inset: 0; box-sizing: border-box;
+             container-type: inline-size; padding: 6% 7%; overflow: hidden;
+             background: linear-gradient(180deg, #a5b4fc 0%, #bbf7b0 100%);
+             font-family: "Zilla Slab", "Roboto Slab", Georgia, serif; color: #000;
+             display: flex; flex-direction: column; gap: 3%; }
+  .nextrun-title { font-size: clamp(16px, 8cqw, 44px); }
+  .nextrun-when  { font-size: clamp(18px, 9cqw, 48px); font-weight: 700; line-height: 1.1; }
+
+  .nextrun-edit { margin-top: auto; background: rgba(255,255,255,.65); border-radius: 10px;
+                  padding: 4% 5%; font-size: clamp(12px, 4.5cqw, 24px); }
+  .nextrun-edit label { display: block; opacity: .7; margin-bottom: 2%; }
+  .nextrun-row { display: flex; gap: 3%; }
+  .nextrun-row input { flex: 1; min-width: 0; font: inherit; padding: .25em .4em;
+                       border: 1px solid #000; border-radius: 6px; background: #fff; }
+  .nextrun-row button { font: inherit; background: #000; color: #fff; border: none;
+                        border-radius: 6px; padding: .25em .9em; cursor: pointer; }
+  .nextrun-row button:hover { background: #333; }
+
+  .nextrun-full { align-self: flex-end; color: #000; font-size: clamp(11px, 4cqw, 20px); }
+</style>

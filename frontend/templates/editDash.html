@@ -47,6 +47,7 @@
 <body data-user-id="{{ dashboard.id }}">
   <div id="card-source" hidden>
     {% include "cards/sprinkler.html" %}
+    {% include "cards/schedule.html" %}
   </div>
   <div class="screen" id="screen">
     <img class="logo" src="{{ url_for('static', filename='aquathinklogo.png') }}" alt="Aqua think">
@@ -65,7 +66,7 @@
   </div>
 <!-------------------- Editing Functions ----------------------------------------->
 <script>
-  const options = ["Sprinkler", "Clock", "Weather", "Calendar", "Reports"];
+  const options = ["Sprinkler", "Clock", "Weather", "Calendar", "Reports", "Schedule"];
 
   const cards = { Sprinkler: ".sprinkler" };
 
