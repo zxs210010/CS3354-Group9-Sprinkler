@@ -9,7 +9,7 @@ import urllib.request
 
 ACCOUNT_ID = "0a1f0d7a2efde9dc6f7f86b125bfa23b"
 DATABASE_ID = "1a23b01a-fa14-4dae-b1f5-89523e281414"
-TOKEN = os.environ["cfut_87IvkDKgZK5z4wtpHbsr5JKhF8b6ZMHOep2zO8pL8068f46d"]
+TOKEN = os.environ["CF_API_TOKEN"]
 
 URL = (
     f"https://api.cloudflare.com/client/v4/accounts/{ACCOUNT_ID}"

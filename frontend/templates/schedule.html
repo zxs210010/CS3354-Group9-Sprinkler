@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Watering Schedule</title>
+<style>
+  body { margin: 0; min-height: 100vh; font-family: system-ui, sans-serif; color: #172033;
+         background: linear-gradient(135deg, #c5d4fb, #177858); display: flex; justify-content: center; }
+  main { width: 100%; max-width: 40rem; padding: 1.5rem; box-sizing: border-box; }
+  .card { background: #fff; border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 1rem; }
+  h1 { margin: 0 0 1rem; color: #fff; }
+  h2 { margin: 0 0 .75rem; font-size: 1.1rem; }
+  label { display: block; margin-top: .75rem; font-size: .9rem; color: #64748b; }
+  input[type=time], select, input[type=number] { font-size: 1rem; padding: .4rem; width: 100%; box-sizing: border-box; }
+  .day { display: grid; grid-template-columns: 7rem 1fr 1fr; gap: .5rem; align-items: center; padding: .4rem 0;
+         border-bottom: 1px solid #e2e8f0; }
+  .day:last-child { border-bottom: none; }
+  .day input[type=number] { width: 100%; }
+  .day.off input[type=number] { opacity: .4; }
+  .heads { color: #64748b; font-size: .8rem; }
+  .msg { background: #dbeafe; color: #1e3a8a; padding: .75rem 1rem; border-radius: 8px; margin-bottom: 1rem; }
+  .actions { display: flex; gap: .75rem; }
+  button, .back { background: #000; color: #fff; border: none; border-radius: 8px; padding: .7rem 1.4rem;
+                  font-size: 1rem; cursor: pointer; text-decoration: none; }
+  .back { background: #475569; }
+  .next { color: #177858; font-weight: 600; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Watering Schedule</h1>
+
+  {% for m in get_flashed_messages() %}<div class="msg">{{ m }}</div>{% endfor %}
+
+  <form method="post">
+    <div class="card">
+      <h2>When</h2>
+      <p class="next">Next watering: {{ next_run.label if next_run else "Nothing scheduled" }}</p>
+
+      <label for="watering_time">Start time</label>
+      <input id="watering_time" name="watering_time" type="time" value="{{ sched.watering_time }}" required>
+
+      <label for="timezone">Timezone</label>
+      <select id="timezone" name="timezone">
+        {% for tz in timezones %}
+          <option value="{{ tz }}" {{ "selected" if tz == sched.timezone }}>{{ tz }}</option>
+        {% endfor %}
+      </select>
+
+      <label><input type="checkbox" name="is_enabled" {{ "checked" if sched.is_enabled }}> Schedule enabled</label>
+    </div>
+
+    <div class="card">
+      <h2>Limits per day</h2>
+      <div class="day heads"><span>Water</span><span>Max gallons</span><span>Max minutes</span></div>
+      {% for d in days %}
+      <div class="day {{ '' if d.on else 'off' }}">
+        <label style="margin:0;color:inherit">
+          <input type="checkbox" name="{{ d.name }}_on" {{ "checked" if d.on }}> {{ d.name[:3] }}
+        </label>
+        <input type="number" name="{{ d.name }}_gallons" min="0" max="10000" value="{{ d.gallons }}">
+        <input type="number" name="{{ d.name }}_minutes" min="0" max="10000" value="{{ d.minutes }}">
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="actions">
+      <button type="submit">Save</button>
+      <a class="back" href="{{ url_for('dashboard', user_id=dashboard.id) }}">Back to dashboard</a>
+    </div>
+  </form>
+</main>
+
+<script>
+  document.querySelectorAll(".day input[type=checkbox]").forEach(box => {
+    box.addEventListener("change", () => box.closest(".day").classList.toggle("off", !box.checked));
+  });
+</script>
+</body>
+</html>

@@ -1,7 +1,7 @@
 """Offline tests for AquaThink's weather module."""
 import unittest
 from unittest.mock import patch
-from weather_service import WeatherServiceError, get_location, get_watering_data
+from backend.weather_service import WeatherServiceError, get_location, get_watering_data
 
 
 class WeatherServiceTests(unittest.TestCase):

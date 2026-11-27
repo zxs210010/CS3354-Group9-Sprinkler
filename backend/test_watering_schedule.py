@@ -1,5 +1,5 @@
 import unittest
-from watering_schedule import set_watering_time, get_watering_datetime
+from backend.timing.watering_schedule import set_watering_time, get_watering_datetime
 
 
 class WateringScheduleTests(unittest.TestCase):
