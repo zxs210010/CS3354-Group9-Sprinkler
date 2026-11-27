@@ -99,71 +99,80 @@ def parse_key(key):
 def decode_key(key):
     return parse_key(key) or DEFAULT_LAYOUT
 
-
 # Watering schedule helpers
-# One to three name parts, e.g. UTC, America/Chicago, America/Argentina/Buenos_Aires
-TZ_NAME = re.compile(r"^[A-Za-z0-9_+\-]+(/[A-Za-z0-9_+\-]+){0,2}$")
+# Every weekday has its own start time, on/off switch and limits (table daily_settings).
+# The server never works with timezones: it hands the browser the timezone saved with the
+# user's location (as text) and the browser works out "now" and "next run" itself.
+TIME_OK = "Watering time updated successfully"
+DEFAULT_DAY = {"on": True, "time": "06:00", "gallons": 100, "minutes": 15}
 
 
-def clean_tz(value):
-    """Keep a timezone name as text. Empty means 'use the viewer's own timezone'."""
-    value = (value or "").strip()
-    return value if value and len(value) <= 64 and TZ_NAME.match(value) else ""
+def get_user_timezone(uid):
+    """Timezone name saved with the user's location ('' if none: the browser's own is used)."""
+    rows = query("SELECT timezone FROM locations WHERE user_id = ?", [uid])
+    return rows[0]["timezone"] if rows and rows[0]["timezone"] else ""
 
 
-def load_schedule(uid):
+def load_days(uid):
+    """Return {weekday name: row} for the days this user has saved."""
     rows = query(
-        "SELECT watering_time, timezone, is_enabled FROM watering_schedules WHERE user_id = ?",
+        """
+        SELECT day_of_week, watering_time, is_enabled, max_water_gallons, max_duration_min
+        FROM daily_settings WHERE user_id = ?
+        """,
         [uid],
     )
-    return rows[0] if rows else None
+    return {r["day_of_week"]: r for r in rows}
 
 
-def store_schedule(uid, watering_time, tz, is_enabled):
+def save_week(uid, rows):
+    """Save all seven days in ONE request. rows = [(day, time, on, gallons, minutes), ...]"""
+    placeholders = ", ".join(["(?, ?, ?, ?, ?, ?)"] * len(rows))
+    params = []
+    for day, time_str, on, gallons, minutes in rows:
+        params += [uid, day, time_str, 1 if on else 0, gallons, minutes]
     execute(
-        """
-        INSERT INTO watering_schedules (user_id, watering_time, timezone, is_enabled)
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT(user_id) DO UPDATE SET
+        f"""
+        INSERT INTO daily_settings
+            (user_id, day_of_week, watering_time, is_enabled, max_water_gallons, max_duration_min)
+        VALUES {placeholders}
+        ON CONFLICT(user_id, day_of_week) DO UPDATE SET
             watering_time = excluded.watering_time,
-            timezone = excluded.timezone,
             is_enabled = excluded.is_enabled,
-            updated_at = datetime('now')
+            max_water_gallons = excluded.max_water_gallons,
+            max_duration_min = excluded.max_duration_min
         """,
-        [uid, watering_time, tz, 1 if is_enabled else 0],
+        params,
     )
 
 
-def location_timezone(uid):
-    """The timezone of the user's saved location, or '' if they have none."""
-    loc = get_location(uid)
-    return (loc or {}).get("timezone") or ""
-
-
-def user_timezone(uid, default="America/Chicago"):
-    """For backend code: the schedule's zone, else the location's, else a default."""
-    sched = load_schedule(uid)
-    return (sched["timezone"] if sched else "") or location_timezone(uid) or default
+def day_forms(uid):
+    """The seven days as the schedule page shows them (saved values, else defaults)."""
+    saved = load_days(uid)
+    out = []
+    for name in DAYS:
+        r = saved.get(name)
+        out.append({
+            "name": name,
+            "on": bool(r["is_enabled"]) if r else DEFAULT_DAY["on"],
+            "time": r["watering_time"] if r else DEFAULT_DAY["time"],
+            "gallons": r["max_water_gallons"] if r else DEFAULT_DAY["gallons"],
+            "minutes": r["max_duration_min"] if r else DEFAULT_DAY["minutes"],
+        })
+    return out
 
 
 def schedule_data(uid):
-    """Plain data handed to the browser so it can work out the next run itself"""
-    sched = load_schedule(uid)
-    if not sched:
+    """Plain data for the browser to work out the next run. None if nothing is saved yet."""
+    saved = load_days(uid)
+    if not saved:
         return None
-    settings = get_daily_settings(uid)
-    off_days = []
-    for i, name in enumerate(DAYS):
-        s = settings.get(name)
-        if s and not s["max_water_gallons"] and not s["max_duration_min"]:
-            off_days.append(i)
-    return {
-        "enabled": bool(sched["is_enabled"]),
-        "time": sched["watering_time"],
-        "timezone": sched["timezone"] or location_timezone(uid),
-        "offDays": off_days,
-    }
-
+    days = []
+    for name in DAYS:
+        r = saved.get(name)
+        days.append({"on": bool(r and r["is_enabled"]),
+                     "time": r["watering_time"] if r else DEFAULT_DAY["time"]})
+    return {"timezone": get_user_timezone(uid), "days": days}
 
 def to_int(value, default=0, maximum=10000):
     try:
@@ -205,61 +214,38 @@ def schedule(user_id):
     uid = session["user_id"]
 
     if request.method == "POST":
-        draft = {}
-        result = set_watering_time(draft, request.form.get("watering_time", ""))
-        if result != "Watering time updated successfully":
-            flash(result)
-            return redirect(url_for("schedule", user_id=uid))
-
-        store_schedule(uid, draft["watering_time"], clean_tz(request.form.get("timezone")),
-                       request.form.get("is_enabled") == "on")
-
+        rows = []
         for day in DAYS:
-            if request.form.get(f"{day}_enabled") == "on":
-                gallons = to_int(request.form.get(f"{day}_gallons"))
-                minutes = to_int(request.form.get(f"{day}_minutes"))
-            else:
-                gallons = minutes = 0
-            set_daily_setting(uid, day, gallons, minutes)
-
+            time_str = request.form.get(f"{day}_time", "")
+            if set_watering_time({}, time_str) != TIME_OK:
+                flash(f"Invalid watering time for {day}.")
+                return redirect(url_for("schedule", user_id=uid))
+            rows.append((day, time_str,
+                         request.form.get(f"{day}_enabled") == "on",
+                         to_int(request.form.get(f"{day}_gallons")),
+                         to_int(request.form.get(f"{day}_minutes"))))
+        save_week(uid, rows)
         return redirect(url_for("dashboard", user_id=uid))
 
-    sched = dict(load_schedule(uid) or {"watering_time": "06:00", "is_enabled": 1})
-    if not sched.get("timezone"):
-        sched["timezone"] = location_timezone(uid)    # default to the saved location's zone
+    return render_template("schedule.html", dashboard={"id": uid},
+                           days=day_forms(uid), sched_data=schedule_data(uid))
 
-    saved = get_daily_settings(uid)
-    days = []
-    for name in DAYS:
-        s = saved.get(name)
-        on = s is None or bool(s["max_water_gallons"] or s["max_duration_min"])
-        days.append({
-            "name": name,
-            "enabled": on,
-            "gallons": s["max_water_gallons"] if s and on else 100,
-            "minutes": s["max_duration_min"] if s and on else 15,
-        })
-
-    return render_template("schedule.html", dashboard={"id": uid}, sched=sched,
-                           days=days, sched_data=schedule_data(uid))
-
-
+# Quick edit of one day's start time (used by the Next Activation card on the dashboard)
 @app.route("/user/<string:user_id>/schedule/time", methods=["POST"])
 @login_required
 def update_time(user_id):
     uid = session["user_id"]
-    draft = {}
-    result = set_watering_time(draft, request.form.get("watering_time", ""))
-    if result != "Watering time updated successfully":
-        flash(result)
+    day = request.form.get("day", "")
+    time_str = request.form.get("watering_time", "")
+    if day not in DAYS or set_watering_time({}, time_str) != TIME_OK:
+        flash("Invalid watering time.")
         return redirect(url_for("schedule", user_id=uid))
 
-    current = load_schedule(uid)
-    enabled = bool(current["is_enabled"]) if current else True
-    zone = (current["timezone"] if current else "") or location_timezone(uid)
-    store_schedule(uid, draft["watering_time"], zone, enabled)
+    execute(
+        "UPDATE daily_settings SET watering_time = ? WHERE user_id = ? AND day_of_week = ?",
+        [time_str, uid, day],
+    )
     return redirect(url_for("dashboard", user_id=uid))
-
 
 @app.route("/user/<string:user_id>/profile")
 @login_required

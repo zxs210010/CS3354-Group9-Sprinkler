@@ -48,6 +48,7 @@
   <div id="card-source" hidden>
     {% include "cards/sprinkler.html" %}
     {% include "cards/schedule.html" %}
+    {% include "cards/clock.html" %}
   </div>
   <div class="screen" id="screen">
     <img class="logo" src="{{ url_for('static', filename='aquathinklogo.png') }}" alt="Aqua think">
@@ -68,7 +69,7 @@
 <script>
   const options = ["Sprinkler", "Clock", "Weather", "Calendar", "Reports", "Schedule"];
 
-  const cards = { Sprinkler: ".sprinkler", Schedule: ".nextrun" };
+  const cards = { Sprinkler: ".sprinkler", Schedule: ".nextrun", Clock: ".daytime" };
 
   function setupPanel(panel) {
     const picker = document.createElement("select");
