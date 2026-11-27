@@ -2,7 +2,7 @@ import os, re, sys
 from datetime import datetime, timedelta
 from functools import wraps
 from pathlib import Path
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.append(str(ROOT))
@@ -122,6 +122,11 @@ def store_schedule(uid, watering_time, is_enabled):
         [uid, watering_time, SCHEDULE_TZ, 1 if is_enabled else 0],
     )
 
+def get_schedule_tz():
+    try:
+        return ZoneInfo(SCHEDULE_TZ)
+    except ZoneInfoNotFoundError:
+        return datetime.now().astimezone().tzinfo
 
 def next_watering(uid):
     """Return {'label', 'timezone'} for the next run, or None if nothing is scheduled."""
@@ -130,7 +135,7 @@ def next_watering(uid):
         return None
 
     hh, mm = map(int, sched["watering_time"].split(":"))
-    now = datetime.now(ZoneInfo(SCHEDULE_TZ))
+    now = datetime.now(get_schedule_tz())
     settings = get_daily_settings(uid)
 
     for offset in range(8):
@@ -239,17 +244,13 @@ def update_time(user_id):
     store_schedule(uid, draft["watering_time"], enabled)
     return redirect(url_for("dashboard", user_id=uid))
 
-# In Progress
 @app.route("/user/<string:user_id>/profile")
 @login_required
 def profile(user_id):
-    user_profile = {
-        "id": user_id,
-        "username": "JohnDoe",
-        "email": "johndoe@example.com",
-    }
-    return render_template("profile.html", profile=user_profile)
-
+    uid = session["user_id"]
+    user = get_user_by_id(uid)
+    layout = decode_key(get_layout_key(uid))
+    return render_template("profile.html", profile=user, layout=layout)
 
 @app.route("/user/<string:user_id>/notifications", methods=["POST"])
 @login_required
