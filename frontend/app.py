@@ -10,16 +10,17 @@ from backend.create_account import (get_user_by_id, AccountError, create_user,
                                     verify_login, query, execute)
 from backend.timing.watering_schedule import set_watering_time
 from backend.timing.daily_settings import get_daily_settings, set_daily_setting, DAYS
-from backend.notification_settings import (
+from backend.notifications.notification_settings import (
     get_notification_settings,
     save_notification_settings,
 )
+from backend.location.location import save_location, get_location
 from backend.account_settings import delete_user_account, update_user_password
 
 from flask import Flask, render_template, request, redirect, session, url_for, flash
 
 app = Flask(__name__)
-app.secret_key = "change-this-to-a-random-string"
+app.secret_key = os.environ.get("SECRET_KEY", "dev-only-key")
 
 # Admin Route
 @app.route("/")
@@ -80,7 +81,7 @@ def logout():
 # Customize UI Key
 OPTIONS = ["Sprinkler", "Clock", "Weather", "Schedule", "Reports"]
 DEFAULT_LAYOUT = {"c1": "#c5d4fb", "c2": "#177858",
-                  "panels": ["Sprinkler", "Clock", "Calendar", "Reports"]}
+                  "panels": ["Sprinkler", "Clock", "Schedule", "Reports"]}
 
 
 def parse_key(key):
@@ -99,13 +100,16 @@ def decode_key(key):
     return parse_key(key) or DEFAULT_LAYOUT
 
 
-# Watering schedule helpers 
-TZ_NAME = re.compile(r"^([A-Za-z0-9_+\-]+/[A-Za-z0-9_+\-]+){0,2}$")
+# Watering schedule helpers
+# One to three name parts, e.g. UTC, America/Chicago, America/Argentina/Buenos_Aires
+TZ_NAME = re.compile(r"^[A-Za-z0-9_+\-]+(/[A-Za-z0-9_+\-]+){0,2}$")
+
 
 def clean_tz(value):
     """Keep a timezone name as text. Empty means 'use the viewer's own timezone'."""
     value = (value or "").strip()
     return value if value and len(value) <= 64 and TZ_NAME.match(value) else ""
+
 
 def load_schedule(uid):
     rows = query(
@@ -129,8 +133,21 @@ def store_schedule(uid, watering_time, tz, is_enabled):
         [uid, watering_time, tz, 1 if is_enabled else 0],
     )
 
+
+def location_timezone(uid):
+    """The timezone of the user's saved location, or '' if they have none."""
+    loc = get_location(uid)
+    return (loc or {}).get("timezone") or ""
+
+
+def user_timezone(uid, default="America/Chicago"):
+    """For backend code: the schedule's zone, else the location's, else a default."""
+    sched = load_schedule(uid)
+    return (sched["timezone"] if sched else "") or location_timezone(uid) or default
+
+
 def schedule_data(uid):
-    """Plain data handed to the browser so it ran work out the next run itself"""
+    """Plain data handed to the browser so it can work out the next run itself"""
     sched = load_schedule(uid)
     if not sched:
         return None
@@ -138,15 +155,15 @@ def schedule_data(uid):
     off_days = []
     for i, name in enumerate(DAYS):
         s = settings.get(name)
-        if  s and not s["max_water_gallons"] and not s["max_duration_min"]:
+        if s and not s["max_water_gallons"] and not s["max_duration_min"]:
             off_days.append(i)
-        return {
-            "enabled": bool(sched["is_enabled"]),
-            "time": sched["watering_time"],
-            "timezone": sched["timezone"],
-            "offDays": off_days,
+    return {
+        "enabled": bool(sched["is_enabled"]),
+        "time": sched["watering_time"],
+        "timezone": sched["timezone"] or location_timezone(uid),
+        "offDays": off_days,
+    }
 
-        }
 
 def to_int(value, default=0, maximum=10000):
     try:
@@ -178,7 +195,7 @@ def edit_dash(user_id):
     uid = session["user_id"]
     layout = decode_key(get_layout_key(uid))
     return render_template("editDash.html", dashboard={"id": user_id}, layout=layout,
-                           next_run=schedule_data(uid))
+                           sched_data=schedule_data(uid))
 
 
 # Watering Schedule page
@@ -195,7 +212,7 @@ def schedule(user_id):
             return redirect(url_for("schedule", user_id=uid))
 
         store_schedule(uid, draft["watering_time"], clean_tz(request.form.get("timezone")),
-                        request.form.get("is_enabled") == "on")
+                       request.form.get("is_enabled") == "on")
 
         for day in DAYS:
             if request.form.get(f"{day}_enabled") == "on":
@@ -207,7 +224,10 @@ def schedule(user_id):
 
         return redirect(url_for("dashboard", user_id=uid))
 
-    sched = load_schedule(uid) or {"watering_time": "06:00", "is_enabled": 1}
+    sched = dict(load_schedule(uid) or {"watering_time": "06:00", "is_enabled": 1})
+    if not sched.get("timezone"):
+        sched["timezone"] = location_timezone(uid)    # default to the saved location's zone
+
     saved = get_daily_settings(uid)
     days = []
     for name in DAYS:
@@ -223,6 +243,7 @@ def schedule(user_id):
     return render_template("schedule.html", dashboard={"id": uid}, sched=sched,
                            days=days, sched_data=schedule_data(uid))
 
+
 @app.route("/user/<string:user_id>/schedule/time", methods=["POST"])
 @login_required
 def update_time(user_id):
@@ -235,9 +256,10 @@ def update_time(user_id):
 
     current = load_schedule(uid)
     enabled = bool(current["is_enabled"]) if current else True
-    zone = current["timezone"] if current else ""
+    zone = (current["timezone"] if current else "") or location_timezone(uid)
     store_schedule(uid, draft["watering_time"], zone, enabled)
     return redirect(url_for("dashboard", user_id=uid))
+
 
 @app.route("/user/<string:user_id>/profile")
 @login_required
@@ -256,14 +278,33 @@ def notifications(user_id):
     return redirect(url_for("admin"))
 
 
-@app.route("/user/<string:user_id>/location")
+@app.route("/user/<string:user_id>/location", methods=["GET", "POST"])
 @login_required
 def location(user_id):
-    user_location = {
-        "city": "New York",
-        "country": "USA",
-    }
-    return render_template("location.html", location=user_location, user_id=user_id)
+    uid = session["user_id"]
+
+    if request.method == "POST":
+        try:
+            place = save_location(uid, request.form.get("city"),
+                                  request.form.get("state"), request.form.get("country"))
+        except AccountError as exc:                    # LocationError is a subclass
+            flash(str(exc), "error")
+            typed = {"city": request.form.get("city", ""),
+                     "state": request.form.get("state", ""),
+                     "country": request.form.get("country", "")}
+            return render_template("location.html", place=typed, user_id=uid)
+
+        # Moving location moves the watering schedule's timezone with it
+        if place.get("timezone"):
+            execute("UPDATE watering_schedules SET timezone = ? WHERE user_id = ?",
+                    [place["timezone"], uid])
+
+        flash("Location saved.")
+        return redirect(url_for("dashboard", user_id=uid))
+
+    return render_template("location.html", location=get_location(uid), user_id=uid)
+
+
 @app.route("/user/<string:user_id>/account", methods=["GET", "POST"])
 @login_required
 def account_settings(user_id):
@@ -305,6 +346,7 @@ def account_settings(user_id):
         layout=layout,
         notif=notif,
     )
+
 
 if __name__ == "__main__":
     app.run(debug=True)

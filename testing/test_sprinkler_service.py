@@ -1,5 +1,5 @@
 import unittest
-from backend.sprinkler_service import add_sprinkler, rename_sprinkler, remove_sprinkler
+from backend.sprinkler.sprinkler_service import add_sprinkler, rename_sprinkler, remove_sprinkler
 
 class SprinklerServiceTests(unittest.TestCase):
 

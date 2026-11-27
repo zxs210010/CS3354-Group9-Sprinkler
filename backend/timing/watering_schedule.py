@@ -1,15 +1,14 @@
 from datetime import datetime
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-def get_watering_datetime(year, month, day, hour, minute):
-    timezone = ZoneInfo("America/Chicago")
+DEFAULT_TZ = "America/Chicago"
 
-    watering_datetime = datetime(
-        year, month, day, hour, minute,
-        tzinfo=timezone
-    )
-
-    return watering_datetime
+def get_watering_datetime(year, month, day, hour, minute, tz_name=None):
+    try:
+        timezone = ZoneInfo(tz_name or DEFAULT_TZ)
+    except ZoneInfoNotFoundError:
+        tz = ZoneInfo(DEFAULT_TZ)
+    return datetime(year, month, day, hour, minute, tzinfo=tz)
 
 def set_watering_time(schedule, new_time):
     try:

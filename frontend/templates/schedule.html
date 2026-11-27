@@ -76,7 +76,7 @@
     <div class="box time-row">
       <select name="timezone" id="timezone" data-saved="{{ sched.timezone }}"></select>
     </div>
-    <p class="hint">Applies to every day. Defaults to this device's timezone. It will come from your location later.</p>
+    <p class="hint">Applies to every day. Starts from your saved location's timezone, or this device's if no location is saved. <a href="{{ url_for('location', user_id=dashboard.id) }}">Set location</a></p>
 
     <span class="label">Max Water (Gal) Per Day</span>
     <div class="box stepper">
