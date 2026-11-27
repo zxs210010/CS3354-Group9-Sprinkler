@@ -1,0 +1,140 @@
+<!doctype html>
+{% set c1 = layout.c1 if layout is defined and layout and layout.c1 else '#c5d4fb' %}
+{% set c2 = layout.c2 if layout is defined and layout and layout.c2 else '#177858' %}
+{% set uid = profile.id if profile is defined and profile and profile.id is defined else user_id %}
+<html lang="en" style="--c1: {{ c1 }}; --c2: {{ c2 }};">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Account Settings</title>
+<style>
+    :root { --c1: #c5d4fb; --c2: #177858;
+            --bg: linear-gradient(135deg, var(--c1), var(--c2)); }
+    body { margin: 0; background: #ba5555; display: flex; justify-content: center;
+           min-height: 100vh; min-height: 100dvh; overflow-x: hidden; font-family: system-ui, sans-serif; }
+    .screen { width: 100%; min-height: 100vh; min-height: 100dvh;
+              padding: 2vh 30px 4vh; box-sizing: border-box;
+              display: flex; flex-direction: column; align-items: center;
+              background: var(--bg); }
+    .logo { display: block; height: 12vh; width: auto; margin: 0 auto 2vh; flex: none; }
+
+    .settings-stack { width: 100%; max-width: 520px; display: flex; flex-direction: column; gap: 18px; }
+    .panel { background: #d9d9d9; width: 100%; padding: 24px 26px; box-sizing: border-box;
+             display: flex; flex-direction: column; gap: 12px; position: relative; }
+    .panel h1 { margin: 0 0 4px; text-align: center; font-size: 28px; color: #000; }
+    .panel h2 { margin: 0 0 4px; font-size: 20px; color: #000; }
+    .user-meta { margin: 0; text-align: center; font-size: 14px; color: #222; word-break: break-word; }
+
+    .msg { background: #fff; color: #1f6b4a; border-radius: 8px; padding: 10px 14px; font-size: 14px; font-weight: 600; }
+    .msg.err { color: #9b1c1c; }
+
+    label.field { display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 600; color: #111; }
+    input[type="password"], input[type="time"] {
+        width: 100%; padding: 10px 12px; box-sizing: border-box;
+        border: 1px solid #999; border-radius: 6px; background: #fff;
+        font-size: 16px; font-family: inherit; color: #000;
+    }
+    .check-row { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 600; color: #111; cursor: pointer; }
+    .check-row input { width: 18px; height: 18px; }
+
+    .action-btn { display: block; width: 100%; padding: 12px 18px; box-sizing: border-box;
+                  background: #000; color: #fff; text-align: center; text-decoration: none;
+                  font-size: 16px; font-weight: 600; border: none; border-radius: 8px;
+                  cursor: pointer; font-family: inherit; transition: opacity .2s ease; }
+    .action-btn:hover { opacity: 0.85; }
+    .action-btn.danger { background: #ba5555; }
+    .action-btn.secondary { background: #333; }
+
+    .hud-button { position: fixed; top: 2vh; left: 16px; z-index: 30;
+      width: 44px; height: 44px; border-radius: 8px;
+      background: #000; color: #fff; font-size: 24px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; user-select: none; }
+
+    .hud { position: fixed; top: 0; left: 0; height: 100%;
+        width: 280px; max-width: 80vw; box-sizing: border-box;
+        padding: 70px 20px 20px; background: #fff; z-index: 20;
+        display: flex; flex-direction: column; gap: 14px;
+        transform: translateX(-100%); transition: transform .25s ease; }
+    .hud h2 { margin: 0 0 10px; }
+    .hud a { color: #000; text-decoration: none; font-size: 20px; padding: 8px 0; }
+    .hud a:hover { text-decoration: underline; }
+
+    .hud-backdrop { position: fixed; inset: 0; z-index: 10;
+            background: rgba(0,0,0,.4); opacity: 0;
+            pointer-events: none; transition: opacity .25s ease; }
+
+    #hud-toggle:checked ~ .hud { transform: translateX(0); }
+    #hud-toggle:checked ~ .hud-backdrop { opacity: 1; pointer-events: auto; }
+</style>
+</head>
+<body data-user-id="{{ uid }}">
+    <input type="checkbox" id="hud-toggle" hidden>
+    <label for="hud-toggle" class="hud-button" aria-label="Toggle menu">☰</label>
+    <label for="hud-toggle" class="hud-backdrop"></label>
+
+    <aside class="hud">
+        <h2>Menu</h2>
+        <a href="{{ url_for('dashboard', user_id=uid) }}">Dashboard</a>
+        <a href="{{ url_for('edit_dash', user_id=uid) }}">Edit Dashboard</a>
+        <a href="{{ url_for('profile', user_id=uid) }}">Profile</a>
+        <a href="{{ url_for('location', user_id=uid) }}">Location</a>
+    </aside>
+
+    <div class="screen">
+        <img class="logo" src="{{ url_for('static', filename='aquathinklogo.png') }}" alt="Aqua think">
+        <div class="settings-stack">
+            <div class="panel">
+                <h1>Account Settings</h1>
+                {% if profile and profile.email %}
+                <p class="user-meta">{{ profile.email }}</p>
+                {% endif %}
+                {% for m in get_flashed_messages() %}
+                <div class="msg {{ 'err' if 'incorrect' in m.lower() or 'invalid' in m.lower() or 'must' in m.lower() or 'not found' in m.lower() or 'please' in m.lower() else '' }}">{{ m }}</div>
+                {% endfor %}
+            </div>
+
+            <form class="panel" method="post" action="{{ url_for('account_settings', user_id=uid) }}">
+                <input type="hidden" name="action" value="notifications">
+                <h2>Notification Settings</h2>
+                <label class="check-row">
+                    <input type="checkbox" name="notification_enabled" {{ "checked" if notif.notification_enabled }}>
+                    Enable Notifications
+                </label>
+                <label class="field">
+                    Notification Time (HH:MM)
+                    <input type="time" name="notification_time" value="{{ notif.notification_time or '' }}">
+                </label>
+                <button class="action-btn" type="submit">Save Notification Settings</button>
+            </form>
+
+            <form class="panel" method="post" action="{{ url_for('account_settings', user_id=uid) }}">
+                <input type="hidden" name="action" value="change_password">
+                <h2>Change Password</h2>
+                <label class="field">
+                    Current Password
+                    <input type="password" name="current_password" autocomplete="current-password" required>
+                </label>
+                <label class="field">
+                    New Password
+                    <input type="password" name="new_password" autocomplete="new-password" minlength="8" required>
+                </label>
+                <button class="action-btn" type="submit">Update Password</button>
+            </form>
+
+            <form class="panel" method="post" action="{{ url_for('account_settings', user_id=uid) }}"
+                  onsubmit="return confirm('Permanently delete your account? This cannot be undone.');">
+                <input type="hidden" name="action" value="delete_account">
+                <h2>Delete Account</h2>
+                <label class="field">
+                    Confirm Current Password
+                    <input type="password" name="current_password" autocomplete="current-password" required>
+                </label>
+                <button class="action-btn danger" type="submit">Delete Account</button>
+            </form>
+
+            <a class="action-btn secondary" href="{{ url_for('profile', user_id=uid) }}">Back to Profile</a>
+        </div>
+    </div>
+</body>
+</html>
