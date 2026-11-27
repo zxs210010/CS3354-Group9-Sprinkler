@@ -10,6 +10,11 @@ from backend.create_account import (get_user_by_id, AccountError, create_user,
                                     verify_login, query, execute)
 from backend.timing.watering_schedule import set_watering_time
 from backend.timing.daily_settings import get_daily_settings, set_daily_setting, DAYS
+from backend.notification_settings import (
+    get_notification_settings,
+    save_notification_settings,
+)
+from backend.account_settings import delete_user_account, update_user_password
 
 from flask import Flask, render_template, request, redirect, session, url_for, flash
 
@@ -263,7 +268,47 @@ def location(user_id):
         "country": "USA",
     }
     return render_template("location.html", location=user_location, user_id=user_id)
+@app.route("/user/<string:user_id>/account", methods=["GET", "POST"])
+@login_required
+def account_settings(user_id):
+    uid = session["user_id"]
 
+    if request.method == "POST":
+        action = request.form.get("action")
+        try:
+            if action == "notifications":
+                save_notification_settings(
+                    uid,
+                    request.form.get("notification_enabled") == "on",
+                    request.form.get("notification_time", ""),
+                )
+                flash("Notification settings updated.")
+            elif action == "change_password":
+                update_user_password(
+                    uid,
+                    request.form.get("current_password", ""),
+                    request.form.get("new_password", ""),
+                )
+                flash("Password updated successfully.")
+            elif action == "delete_account":
+                delete_user_account(uid, request.form.get("current_password", ""))
+                session.pop("user_id", None)
+                flash("Account deleted.")
+                return redirect(url_for("register"))
+        except AccountError as exc:
+            flash(str(exc))
+
+        return redirect(url_for("account_settings", user_id=uid))
+
+    user = get_user_by_id(uid)
+    layout = decode_key(get_layout_key(uid))
+    notif = get_notification_settings(uid)
+    return render_template(
+        "account_settings.html",
+        profile=user,
+        layout=layout,
+        notif=notif,
+    )
 
 if __name__ == "__main__":
     app.run(debug=True)
