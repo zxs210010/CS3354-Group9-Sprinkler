@@ -1,5 +1,5 @@
-<div class="sprinkler" data-on="false" data-auto="false">
-  <div class="sprinkler-title">Sprinkler Status: <span class="sprinkler-state">OFF</span></div>
+<div class="sprinkler" data-on="false" data-auto="false" data-sched='{{ sched_data | tojson }}'>
+  <div class="sprinkler-title">Sprinkler Status: <span class="sprinkler-state">Manual - OFF</span></div>
 
   <button type="button" class="sprinkler-power" aria-pressed="false" aria-label="Turn sprinkler on">
     <svg viewBox="0 0 100 100" aria-hidden="true" fill="currentColor">
@@ -46,25 +46,141 @@
 <script>
   if (!window.sprinklerReady) {
     window.sprinklerReady = true;
+
+    const SPR_DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+    const SPR_RUN_MS = 60 * 60 * 1000;   // watering window: 1 hour after the scheduled time
+
+    function sprSafeTz(tz) {
+      if (!tz) return undefined;
+      try { new Intl.DateTimeFormat("en-US", { timeZone: tz }); return tz; } catch (e) { return undefined; }
+    }
+
+    // one storage key per user and per card (the dashboard can hold more than one)
+    function sprKey(card) {
+      const all = Array.from(document.querySelectorAll(".sprinkler"));
+      return "sprinkler:" + (document.body.dataset.userId || "0") + ":" + all.indexOf(card);
+    }
+
+    function sprSave(card) {
+      try {
+        localStorage.setItem(sprKey(card), JSON.stringify({
+          auto: card.dataset.auto === "true",
+          on: card.dataset.on === "true",
+          stopAt: card.dataset.stopAt || null,
+          lastRun: card.dataset.lastRun || null
+        }));
+      } catch (e) {}
+    }
+
+    // builds "Manual - OFF", "Auto - ON", etc.
+    function sprRenderLabel(card) {
+      const mode = card.dataset.auto === "true" ? "Auto" : "Manual";
+      const state = card.dataset.on === "true" ? "ON" : "OFF";
+      card.querySelector(".sprinkler-state").textContent = mode + " - " + state;
+    }
+
+    function sprSetOn(card, on) {
+      const power = card.querySelector(".sprinkler-power");
+      card.dataset.on = on;
+      power.setAttribute("aria-pressed", on);
+      power.setAttribute("aria-label", on ? "Turn sprinkler off" : "Turn sprinkler on");
+      sprRenderLabel(card);
+      sprSave(card);
+    }
+
+    function sprSetAuto(card, on) {
+      card.dataset.auto = on;
+      card.querySelector(".sprinkler-auto-switch").setAttribute("aria-checked", on);
+      sprRenderLabel(card);
+      sprSave(card);
+    }
+
+    // restore saved state after a refresh
+    function sprRestore() {
+      document.querySelectorAll(".sprinkler").forEach(card => {
+        let saved = null;
+        try { saved = JSON.parse(localStorage.getItem(sprKey(card)) || "null"); } catch (e) {}
+        if (!saved) return;
+
+        if (saved.lastRun) card.dataset.lastRun = saved.lastRun;
+        sprSetAuto(card, !!saved.auto);
+
+        if (saved.on) {
+          if (saved.stopAt && Date.now() >= Number(saved.stopAt)) {
+            sprSetOn(card, false);                  // the hour ended while the page was closed
+          } else {
+            if (saved.stopAt) card.dataset.stopAt = saved.stopAt;
+            sprSetOn(card, true);                   // run is still in progress
+          }
+        }
+      });
+    }
+
+    function sprTick() {
+      const nowMs = Date.now();
+
+      document.querySelectorAll(".sprinkler").forEach(card => {
+
+        // 1) Force stop: one hour after the scheduled time, no matter what
+        if (card.dataset.stopAt && nowMs >= Number(card.dataset.stopAt)) {
+          delete card.dataset.stopAt;
+          sprSetOn(card, false);
+        }
+
+        // 2) Auto start: only when Auto is enabled
+        if (card.dataset.auto !== "true") return;
+
+        let data = null;
+        try { data = JSON.parse(card.dataset.sched || "null"); } catch (e) {}
+        if (!data || !data.days) return;
+
+        const parts = new Intl.DateTimeFormat("en-US", {
+          timeZone: sprSafeTz(data.timezone), weekday: "long",
+          year: "numeric", month: "2-digit", day: "2-digit",
+          hour: "numeric", minute: "numeric", second: "numeric", hour12: false
+        }).formatToParts(new Date());
+        const get = t => parts.find(p => p.type === t).value;
+
+        const d = data.days[SPR_DAYS.indexOf(get("weekday"))];
+        if (!d || !d.on || !d.time) return;
+
+        const [hh, mm] = d.time.split(":").map(Number);
+        if (isNaN(hh) || isNaN(mm)) return;
+
+        if (parseInt(get("hour"), 10) % 24 !== hh || parseInt(get("minute"), 10) !== mm) return;
+
+        // fire once per scheduled run, so a manual "off" during that minute sticks
+        const runKey = get("year") + "-" + get("month") + "-" + get("day") + " " + d.time;
+        if (card.dataset.lastRun === runKey) return;
+        card.dataset.lastRun = runKey;
+
+        // stop time = scheduled time + 1 hour
+        const secIntoMinute = parseInt(get("second"), 10);
+        card.dataset.stopAt = nowMs - secIntoMinute * 1000 + SPR_RUN_MS;
+
+        sprSetOn(card, true);   // also saves lastRun and stopAt
+      });
+    }
+
     document.addEventListener("click", e => {
       const card = e.target.closest(".sprinkler");
       if (!card) return;
 
-      const power = e.target.closest(".sprinkler-power");
-      const auto = e.target.closest(".sprinkler-auto-switch");
-
-      if (power) {
-        const on = card.dataset.on !== "true";
-        card.dataset.on = on;
-        power.setAttribute("aria-pressed", on);
-        power.setAttribute("aria-label", on ? "Turn sprinkler off" : "Turn sprinkler on");
-        card.querySelector(".sprinkler-state").textContent = on ? "ON" : "OFF";
+      if (e.target.closest(".sprinkler-power")) {
+        sprSetOn(card, card.dataset.on !== "true");           // manual on/off, any time
       }
-      if (auto) {
-        const on = card.dataset.auto !== "true";
-        card.dataset.auto = on;
-        auto.setAttribute("aria-checked", on);
+      if (e.target.closest(".sprinkler-auto-switch")) {
+        sprSetAuto(card, card.dataset.auto !== "true");
       }
     });
+
+    function sprStart() {
+      sprRestore();
+      sprTick();
+      setInterval(sprTick, 1000);
+    }
+    // wait for the whole dashboard so every sprinkler card exists before restoring
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", sprStart);
+    else sprStart();
   }
 </script>
