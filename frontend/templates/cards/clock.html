@@ -1,0 +1,50 @@
+<div class="daytime" data-sched='{{ sched_data | tojson }}'>
+  <div class="daytime-day">--</div>
+  <div class="daytime-time">--:--</div>
+
+  <div class="daytime-next">
+    <span class="daytime-next-label">Next watering</span>
+    <strong class="daytime-next-text">Nothing scheduled</strong>
+  </div>
+
+  <a class="daytime-edit" href="{{ url_for('schedule', user_id=dashboard.id) }}">Edit</a>
+</div>
+
+<style>
+  .daytime { position: absolute; inset: 0; box-sizing: border-box;
+             container-type: inline-size; padding: 6% 7%; overflow: hidden;
+             background: linear-gradient(180deg, #a5b4fc 0%, #bbf7b0 100%);
+             font-family: "Zilla Slab", "Roboto Slab", Georgia, serif; color: #000;
+             display: flex; flex-direction: column; justify-content: center; gap: 2%; }
+  .daytime-day  { font-size: clamp(16px, 8cqw, 44px); }
+  .daytime-time { font-size: clamp(24px, 14cqw, 72px); line-height: 1; }
+  .daytime-next { margin-top: 4%; font-size: clamp(13px, 5.5cqw, 30px); }
+  .daytime-next-label { display: block; opacity: .7; }
+  .daytime-edit { position: absolute; right: 5%; bottom: 5%; background: #000; color: #fff;
+                  text-decoration: none; border-radius: 8px; padding: .4em 1em;
+                  font-size: clamp(13px, 5cqw, 26px); }
+  .daytime-edit:hover { background: #333; }
+</style>
+
+<script src="{{ url_for('static', filename='nextwatering.js') }}"></script>
+<script>
+  if (!window.daytimeReady) {
+    window.daytimeReady = true;
+    function daytimeTick() {
+      const now = new Date();
+      document.querySelectorAll(".daytime").forEach(card => {
+        let data = null;
+        try { data = JSON.parse(card.dataset.sched || "null"); } catch (e) {}
+        const tz = AquaTime.safeTz(data && data.timezone);
+        card.querySelector(".daytime-day").textContent =
+          now.toLocaleDateString([], { weekday: "long", timeZone: tz });
+        card.querySelector(".daytime-time").textContent =
+          now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit", timeZone: tz });
+        card.querySelector(".daytime-next-text").textContent =
+          AquaTime.nextWatering(data) || "Nothing scheduled";
+      });
+    }
+    daytimeTick();
+    setInterval(daytimeTick, 1000);
+  }
+</script>

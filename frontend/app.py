@@ -1,8 +1,6 @@
 import os, re, sys
-from datetime import datetime, timedelta
 from functools import wraps
 from pathlib import Path
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.append(str(ROOT))
@@ -10,16 +8,13 @@ sys.path.append(str(ROOT))
 from backend.uicustom.dashboard_layout import get_layout_key, save_layout_key
 from backend.create_account import (get_user_by_id, AccountError, create_user,
                                     verify_login, query, execute)
-from backend.timing.watering_schedule import get_watering_datetime, set_watering_time
+from backend.timing.watering_schedule import set_watering_time
 from backend.timing.daily_settings import get_daily_settings, set_daily_setting, DAYS
 
 from flask import Flask, render_template, request, redirect, session, url_for, flash
 
 app = Flask(__name__)
 app.secret_key = "change-this-to-a-random-string"
-
-SCHEDULE_TZ = "America/Chicago"  # matches get_watering_datetime in watering_schedule.py
-
 
 # Admin Route
 @app.route("/")
@@ -99,16 +94,23 @@ def decode_key(key):
     return parse_key(key) or DEFAULT_LAYOUT
 
 
-# Watering schedule helpers (use watering_schedule.py and daily_settings.py as-is)
+# Watering schedule helpers 
+TZ_NAME = re.compile(r"^([A-Za-z0-9_+\-]+/[A-Za-z0-9_+\-]+){0,2}$")
+
+def clean_tz(value):
+    """Keep a timezone name as text. Empty means 'use the viewer's own timezone'."""
+    value = (value or "").strip()
+    return value if value and len(value) <= 64 and TZ_NAME.match(value) else ""
+
 def load_schedule(uid):
     rows = query(
-        "SELECT watering_time, is_enabled FROM watering_schedules WHERE user_id = ?",
+        "SELECT watering_time, timezone, is_enabled FROM watering_schedules WHERE user_id = ?",
         [uid],
     )
     return rows[0] if rows else None
 
 
-def store_schedule(uid, watering_time, is_enabled):
+def store_schedule(uid, watering_time, tz, is_enabled):
     execute(
         """
         INSERT INTO watering_schedules (user_id, watering_time, timezone, is_enabled)
@@ -119,40 +121,27 @@ def store_schedule(uid, watering_time, is_enabled):
             is_enabled = excluded.is_enabled,
             updated_at = datetime('now')
         """,
-        [uid, watering_time, SCHEDULE_TZ, 1 if is_enabled else 0],
+        [uid, watering_time, tz, 1 if is_enabled else 0],
     )
 
-def get_schedule_tz():
-    try:
-        return ZoneInfo(SCHEDULE_TZ)
-    except ZoneInfoNotFoundError:
-        return datetime.now().astimezone().tzinfo
-
-def next_watering(uid):
-    """Return {'label', 'timezone'} for the next run, or None if nothing is scheduled."""
+def schedule_data(uid):
+    """Plain data handed to the browser so it ran work out the next run itself"""
     sched = load_schedule(uid)
-    if not sched or not sched["is_enabled"]:
+    if not sched:
         return None
-
-    hh, mm = map(int, sched["watering_time"].split(":"))
-    now = datetime.now(get_schedule_tz())
     settings = get_daily_settings(uid)
+    off_days = []
+    for i, name in enumerate(DAYS):
+        s = settings.get(name)
+        if  s and not s["max_water_gallons"] and not s["max_duration_min"]:
+            off_days.append(i)
+        return {
+            "enabled": bool(sched["is_enabled"]),
+            "time": sched["watering_time"],
+            "timezone": sched["timezone"],
+            "offDays": off_days,
 
-    for offset in range(8):
-        d = now + timedelta(days=offset)
-        run = get_watering_datetime(d.year, d.month, d.day, hh, mm)
-        if run <= now:
-            continue
-        day = settings.get(DAYS[run.weekday()])
-        if day and day["max_water_gallons"] == 0 and day["max_duration_min"] == 0:
-            continue  # this weekday is turned off
-
-        when = "Today" if offset == 0 else "Tomorrow" if offset == 1 else run.strftime("%A")
-        time_str = run.strftime("%I:%M %p").lstrip("0")
-        return {"label": f"{when} at {time_str}", "timezone": SCHEDULE_TZ}
-    return {"label": f"{when} at {time_str}", "timezone": SCHEDULE_TZ,
-        "time": f"{hh:02d}:{mm:02d}"}
-
+        }
 
 def to_int(value, default=0, maximum=10000):
     try:
@@ -175,7 +164,7 @@ def dashboard(user_id):
     layout = decode_key(get_layout_key(uid))
     user_dashboard = get_user_by_id(uid)
     return render_template("dashboard.html", dashboard=user_dashboard, layout=layout,
-                           next_run=next_watering(uid))
+                           sched_data=schedule_data(uid))
 
 
 @app.route("/user/<string:user_id>/editDash")
@@ -200,7 +189,8 @@ def schedule(user_id):
             flash(result)
             return redirect(url_for("schedule", user_id=uid))
 
-        store_schedule(uid, draft["watering_time"], request.form.get("is_enabled") == "on")
+        store_schedule(uid, draft["watering_time"], clean.tz(request.form.get("timezone")),
+                        request.form.get("is_enabled") == "on")
 
         for day in DAYS:
             if request.form.get(f"{day}_enabled") == "on":
@@ -210,7 +200,6 @@ def schedule(user_id):
                 gallons = minutes = 0
             set_daily_setting(uid, day, gallons, minutes)
 
-        flash("Schedule updated successfully.")
         return redirect(url_for("dashboard", user_id=uid))
 
     sched = load_schedule(uid) or {"watering_time": "06:00", "is_enabled": 1}
@@ -227,7 +216,7 @@ def schedule(user_id):
         })
 
     return render_template("schedule.html", dashboard={"id": uid}, sched=sched,
-                           days=days, timezone=SCHEDULE_TZ, next_run=next_watering(uid))
+                           days=days, sched_data=schedule_data(uid))
 
 @app.route("/user/<string:user_id>/schedule/time", methods=["POST"])
 @login_required
@@ -241,7 +230,8 @@ def update_time(user_id):
 
     current = load_schedule(uid)
     enabled = bool(current["is_enabled"]) if current else True
-    store_schedule(uid, draft["watering_time"], enabled)
+    zone = current["timezone"] if current else ""
+    store_schedule(uid, draft["watering_time"], zone, enabled)
     return redirect(url_for("dashboard", user_id=uid))
 
 @app.route("/user/<string:user_id>/profile")

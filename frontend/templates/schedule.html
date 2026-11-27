@@ -29,6 +29,8 @@
   .time-row { padding: .9rem 1.1rem; }
   .time-row input[type=time] { width: 100%; border: none; outline: none; font-size: 1.15rem;
                                font-family: inherit; color: var(--ink); background: transparent; }
+  .time-row select { width: 100%; border: none; outline: none; font-size: 1.15rem;
+                     font-family: inherit; color: var(--ink); background: transparent; }
   .hint { margin: .45rem .25rem 0; font-size: .82rem; color: var(--muted); }
 
   .stepper { display: flex; align-items: center; padding: .35rem 1.1rem; min-height: 4.4rem; }
@@ -70,7 +72,11 @@
     <div class="box time-row">
       <input type="time" name="watering_time" id="watering_time" value="{{ sched.watering_time }}" required>
     </div>
-    <p class="hint">Applies to every day. Times are in {{ timezone }}.</p>
+    <span class="label">Timezone</span>
+    <div class="box time-row">
+      <select name="timezone" id="timezone" data-saved="{{ sched.timezone }}"></select>
+    </div>
+    <p class="hint">Applies to every day. Defaults to this device's timezone. It will come from your location later.</p>
 
     <span class="label">Max Water (Gal) Per Day</span>
     <div class="box stepper">
@@ -96,7 +102,7 @@
   </form>
 
   <div class="foot">
-    <span>Next watering: {{ next_run.label if next_run else "Nothing scheduled" }}</span>
+    <span>Next watering: <span id="next-text">Nothing scheduled</span></span>
     <a href="{{ url_for('dashboard', user_id=dashboard.id) }}">Back to dashboard</a>
   </div>
 </main>
@@ -167,6 +173,22 @@
   });
 
   show();
+</script>
+<script src="{{ url_for('static', filename='nextwatering.js') }}"></script>
+<script>
+  const SCHED = {{ sched_data | tojson }};
+
+  // timezone dropdown: every zone the browser knows, saved one (or this device's) preselected
+  (function () {
+    const select = document.getElementById("timezone");
+    const wanted = select.dataset.saved || AquaTime.browserTz() || "";
+    const zones = AquaTime.timezones().slice();
+    if (wanted && !zones.includes(wanted)) zones.unshift(wanted);
+    zones.forEach(z => select.add(new Option(z.replace(/_/g, " "), z)));
+    select.value = wanted;
+  })();
+
+  document.getElementById("next-text").textContent = AquaTime.nextWatering(SCHED) || "Nothing scheduled";
 </script>
 </body>
 </html>
