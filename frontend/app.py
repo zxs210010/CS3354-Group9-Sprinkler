@@ -86,11 +86,11 @@ def login_required(view):
 # DASHBOARD CUSTOMIZATION
 # ============================================================
 
-OPTIONS = ["Sprinkler", "Clock", "Weather", "Schedule", "Reports"]
+OPTIONS = ["Sprinkler", "Clock", "Weather", "Schedule"]
 
 DEFAULT_LAYOUT = {
     "c1": "#c5d4fb", "c2": "#177858",
-    "panels": ["Sprinkler", "Clock", "Schedule", "Reports"],
+    "panels": ["Sprinkler", "Clock", "Schedule", "Weather"],
 }
 
 
@@ -315,7 +315,7 @@ def register():
             flash(str(exc))
         else:
             session["user_id"] = user["id"]
-            return redirect(url_for("dashboard", user_id=user["id"]))
+            return redirect(url_for("location", user_id=user["id"]))
 
     return render_template("auth.html", page=AUTH_PAGES["register"], name="register")
 
@@ -444,7 +444,7 @@ def location(user_id):
             execute("UPDATE watering_schedules SET timezone = ? WHERE user_id = ?", [place["timezone"], uid])
 
         flash("Location saved successfully.")
-        return redirect(url_for("location", user_id=uid))
+        return redirect(url_for("dashboard", user_id=uid))
 
     place = get_saved_location(uid)
     html = render_template(
