@@ -22,3 +22,5 @@ python app.py
 
 Then go to your browser and input this URL:
 http://127.0.0.1:5000/login
+
+To Verify Database go to:
