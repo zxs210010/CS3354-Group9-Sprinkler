@@ -43,6 +43,8 @@ from backend.location.location import get_location as get_saved_location, save_l
 # Weather
 from backend.advice.weather_service import get_weather, recommend_watering, WeatherServiceError
 
+# Database Browsing
+from backend.db_browser import ALLOWED_TABLES, fetch_table_rows
 
 # ============================================================
 # FLASK CONFIGURATION
@@ -524,6 +526,31 @@ def account_settings(user_id):
     notif = get_notification_settings(uid)
 
     return render_template("account_settings.html", profile=user, layout=layout, notif=notif)
+
+# ============================================================
+# DATABASE BROWSING
+# ============================================================
+@app.route("/db_browser")
+def db_browser():
+    selected = request.args.get("table", "").strip()
+    result = None
+
+    if selected:
+        try:
+            result = fetch_table_rows(selected)
+        except AccountError as exc:
+            flash(str(exc))
+            selected = None
+
+    return render_template(
+        "db_browser.html",
+        profile=None,
+        layout=DEFAULT_LAYOUT,
+        tables=ALLOWED_TABLES,
+        selected=selected,
+        result=result,
+        standalone_db=True,
+    )
 
 
 # ============================================================
