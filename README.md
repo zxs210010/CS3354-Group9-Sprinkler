@@ -14,7 +14,7 @@ Go to Project Branch in Command Prompt
 
 Command Prompt: 
 
-set CF_API_TOKEN=cfut_hvMYId74Gwx5Nf5H53u0ANCWEofAIqgIArSYCQ3q65242b70
+set CF_API_TOKEN=cfut_hvMYId74Gwx5Nf5H53u0ANCWEofAIqgIArSYCQ3q65242b70 (Real token is in comments of the submission)
 
 cd frontend
 
