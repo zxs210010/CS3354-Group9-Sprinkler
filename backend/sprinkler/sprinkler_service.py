@@ -1,4 +1,3 @@
-
 def add_sprinkler(sprinklers, name, serial_number):
     if serial_number in sprinklers:
         return "Sprinkler already connected"

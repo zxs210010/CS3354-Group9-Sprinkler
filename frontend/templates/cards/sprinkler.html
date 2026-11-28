@@ -11,6 +11,20 @@
     </svg>
   </button>
 
+  <div class="sprinkler-timer">
+    <div class="sprinkler-timer-box">
+      <div class="sprinkler-timer-label">Time left</div>
+      <div class="sprinkler-timer-value">--</div>
+    </div>
+    <a class="sprinkler-timer-gear" href="{{ url_for('location', user_id=dashboard.id) }}" aria-label="Location settings">
+      <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+    </a>
+  </div>
+
   <div class="sprinkler-auto">
     <span>Auto</span>
     <button type="button" class="sprinkler-auto-switch" role="switch" aria-checked="false" aria-label="Auto mode"></button>
@@ -41,6 +55,20 @@
                                   width: .89em; height: .89em; border-radius: 50%;
                                   background: #fff; transition: left .2s; }
   .sprinkler[data-auto="true"] .sprinkler-auto-switch::after { left: 1.08em; }
+
+  /* timer: time box on the left, black gear box (link to Location) on its right */
+  .sprinkler-timer { position: absolute; left: 7%; bottom: 5%; max-width: 54%;
+                     display: flex; align-items: stretch; gap: .4em;
+                     font-size: clamp(12px, 5cqw, 26px); }
+  .sprinkler-timer-box { background: rgba(255,255,255,.55); border-radius: 8px; padding: .4em .7em; }
+  .sprinkler-timer-label { opacity: .7; font-size: .75em; }
+  .sprinkler-timer-value { font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.2; }
+
+  .sprinkler-timer-gear { background: #000; color: #fff; border-radius: 8px;
+                          width: 2.4em; text-decoration: none;
+                          display: grid; place-items: center; }
+  .sprinkler-timer-gear svg { width: 1.3em; height: 1.3em; }
+  .sprinkler-timer-gear:hover { background: #333; }
 </style>
 
 <script>
@@ -48,14 +76,16 @@
     window.sprinklerReady = true;
 
     const SPR_DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
-    const SPR_RUN_MS = 60 * 60 * 1000;   // watering window: 1 hour after the scheduled time
+    const SPR_RUN_MS    = 60 * 60 * 1000;      // scheduled run length: 1 hour after the scheduled time
+    const SPR_MANUAL_MS = 15 * 60 * 1000;      // default run time when turned on manually
 
     function sprSafeTz(tz) {
       if (!tz) return undefined;
       try { new Intl.DateTimeFormat("en-US", { timeZone: tz }); return tz; } catch (e) { return undefined; }
     }
 
-    // one storage key per user and per card (the dashboard can hold more than one)
+    // ---------- saving (browser only) ----------
+
     function sprKey(card) {
       const all = Array.from(document.querySelectorAll(".sprinkler"));
       return "sprinkler:" + (document.body.dataset.userId || "0") + ":" + all.indexOf(card);
@@ -72,19 +102,38 @@
       } catch (e) {}
     }
 
-    // builds "Manual - OFF", "Auto - ON", etc.
+    // ---------- display ----------
+
     function sprRenderLabel(card) {
       const mode = card.dataset.auto === "true" ? "Auto" : "Manual";
       const state = card.dataset.on === "true" ? "ON" : "OFF";
       card.querySelector(".sprinkler-state").textContent = mode + " - " + state;
     }
 
+    function sprFmt(ms) {
+      const total = Math.max(0, Math.ceil(ms / 1000));
+      const h = Math.floor(total / 3600), m = Math.floor(total % 3600 / 60), s = total % 60;
+      const pad = n => String(n).padStart(2, "0");
+      return h ? h + ":" + pad(m) + ":" + pad(s) : pad(m) + ":" + pad(s);
+    }
+
+    function sprRenderTimer(card) {
+      const on = card.dataset.on === "true";
+      const stopAt = Number(card.dataset.stopAt) || 0;
+      card.querySelector(".sprinkler-timer-value").textContent =
+        !on ? "--" : stopAt ? sprFmt(stopAt - Date.now()) : "No limit";
+    }
+
+    // ---------- state changes ----------
+
     function sprSetOn(card, on) {
       const power = card.querySelector(".sprinkler-power");
       card.dataset.on = on;
+      if (!on) delete card.dataset.stopAt;       // turning off clears the timer
       power.setAttribute("aria-pressed", on);
       power.setAttribute("aria-label", on ? "Turn sprinkler off" : "Turn sprinkler on");
       sprRenderLabel(card);
+      sprRenderTimer(card);
       sprSave(card);
     }
 
@@ -95,7 +144,8 @@
       sprSave(card);
     }
 
-    // restore saved state after a refresh
+    // ---------- restore after refresh ----------
+
     function sprRestore() {
       document.querySelectorAll(".sprinkler").forEach(card => {
         let saved = null;
@@ -107,29 +157,32 @@
 
         if (saved.on) {
           if (saved.stopAt && Date.now() >= Number(saved.stopAt)) {
-            sprSetOn(card, false);                  // the hour ended while the page was closed
+            sprSetOn(card, false);                 // the run ended while the page was closed
           } else {
             if (saved.stopAt) card.dataset.stopAt = saved.stopAt;
-            sprSetOn(card, true);                   // run is still in progress
+            sprSetOn(card, true);                  // still running
           }
         }
       });
     }
+
+    // ---------- every second: stop at zero, start from the schedule ----------
 
     function sprTick() {
       const nowMs = Date.now();
 
       document.querySelectorAll(".sprinkler").forEach(card => {
 
-        // 1) Force stop: one hour after the scheduled time, no matter what
+        // 1) Force stop when the timer reaches zero
         if (card.dataset.stopAt && nowMs >= Number(card.dataset.stopAt)) {
-          delete card.dataset.stopAt;
           sprSetOn(card, false);
         }
+        sprRenderTimer(card);
 
-        // 2) Auto start: only when Auto is enabled
+        // 2) Auto start: only when Auto is on
         if (card.dataset.auto !== "true") return;
 
+        // schedule = { timezone, days: [ {on, time:"HH:MM"} x 7, Monday first ] }
         let data = null;
         try { data = JSON.parse(card.dataset.sched || "null"); } catch (e) {}
         if (!data || !data.days) return;
@@ -142,34 +195,39 @@
         const get = t => parts.find(p => p.type === t).value;
 
         const d = data.days[SPR_DAYS.indexOf(get("weekday"))];
-        if (!d || !d.on || !d.time) return;
+        if (!d || !d.on || !d.time) return;                 // not a watering day
 
         const [hh, mm] = d.time.split(":").map(Number);
         if (isNaN(hh) || isNaN(mm)) return;
 
+        // is it the scheduled minute?
         if (parseInt(get("hour"), 10) % 24 !== hh || parseInt(get("minute"), 10) !== mm) return;
 
-        // fire once per scheduled run, so a manual "off" during that minute sticks
+        // once per scheduled run, so a manual "off" during that minute sticks
         const runKey = get("year") + "-" + get("month") + "-" + get("day") + " " + d.time;
         if (card.dataset.lastRun === runKey) return;
         card.dataset.lastRun = runKey;
 
-        // stop time = scheduled time + 1 hour
+        // stop time = scheduled time + run length
         const secIntoMinute = parseInt(get("second"), 10);
         card.dataset.stopAt = nowMs - secIntoMinute * 1000 + SPR_RUN_MS;
 
-        sprSetOn(card, true);   // also saves lastRun and stopAt
+        sprSetOn(card, true);
       });
     }
+
+    // ---------- clicks ----------
 
     document.addEventListener("click", e => {
       const card = e.target.closest(".sprinkler");
       if (!card) return;
 
       if (e.target.closest(".sprinkler-power")) {
-        sprSetOn(card, card.dataset.on !== "true");           // manual on/off, any time
+        const turningOn = card.dataset.on !== "true";
+        if (turningOn) card.dataset.stopAt = Date.now() + SPR_MANUAL_MS;   // 15 minute default
+        sprSetOn(card, turningOn);
       }
-      if (e.target.closest(".sprinkler-auto-switch")) {
+      else if (e.target.closest(".sprinkler-auto-switch")) {
         sprSetAuto(card, card.dataset.auto !== "true");
       }
     });
