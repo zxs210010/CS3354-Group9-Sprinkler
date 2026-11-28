@@ -14,8 +14,16 @@ import urllib.parse
 import urllib.request
 
 from backend.create_account import AccountError, TOKEN, URL
+from backend.sprinkler.sprinkler_service import add_sprinkler, remove_sprinkler   # adjust the path if yours differs
 
 GEOCODE_URL = "https://geocoding-api.open-meteo.com/v1/search"
+# Placeholder sprinklers (serial number / sprinkler_id -> display name) until real ones exist
+PLACEHOLDER_SPRINKLERS = {
+    "SprinklerA": "Sprinkler A",
+    "SprinklerB": "Sprinkler B",
+    "SprinklerC": "Sprinkler C",
+}
+SPRINKLER_TABLE = "sprinkler_settings"
 NAME_RE = re.compile(r"^[A-Za-z\u00C0-\u024F .'\-]{1,80}$")   # letters, spaces, . ' -
 
 
@@ -182,11 +190,89 @@ def _schema():
     raise LocationError("Location table not found in the database.")
 
 
-def save_location(user_id, city, state, country):
-    """Validate, verify and save the user's location (one row per user)."""
+# --------------------------------------------------------------------------
+# Sprinklers (one row per user in sprinkler_settings, managed with sprinkler_service)
+# --------------------------------------------------------------------------
+
+_sprinkler_cols_cache = None
+
+
+def _sprinkler_cols():
+    """Columns of sprinkler_settings. It must link a sprinkler to a user."""
+    global _sprinkler_cols_cache
+    if _sprinkler_cols_cache:
+        return _sprinkler_cols_cache
+
+    cols = {c["name"] for c in _query(f'PRAGMA table_info("{SPRINKLER_TABLE}")')}
+    if not cols:
+        raise LocationError(f"The {SPRINKLER_TABLE} table was not found in the database.")
+    missing = {"user_id", "sprinkler_id"} - cols
+    if missing:
+        raise LocationError(f"{SPRINKLER_TABLE} needs these columns: {', '.join(sorted(missing))}.")
+    _sprinkler_cols_cache = cols
+    return cols
+
+
+def load_sprinklers(user_id):
+    """The user's sprinklers in the shape sprinkler_service expects: {serial: {"name": ...}}.
+    sprinkler_settings has one row per user, so this holds at most one sprinkler."""
+    _sprinkler_cols()
+    rows = _query(f'SELECT sprinkler_id FROM "{SPRINKLER_TABLE}" WHERE user_id = ?', [user_id])
+    return {
+        r["sprinkler_id"]: {"name": PLACEHOLDER_SPRINKLERS.get(r["sprinkler_id"], r["sprinkler_id"])}
+        for r in rows if r.get("sprinkler_id")
+    }
+
+
+def connect_sprinkler(user_id, sprinkler_id):
+    """Point the user's sprinkler_settings row at this sprinkler (replacing any previous one)."""
+    cols = _sprinkler_cols()
+    sprinklers = load_sprinklers(user_id)
+
+    if sprinkler_id in sprinklers:
+        return "Sprinkler already connected"      # nothing to change
+
+    for old in list(sprinklers):                  # one sprinkler per user: drop the old one
+        remove_sprinkler(sprinklers, old)
+    result = add_sprinkler(sprinklers, PLACEHOLDER_SPRINKLERS[sprinkler_id], sprinkler_id)
+
+    # Keep the row's other settings (auto_mode, is_on, run_minutes); only the id changes
+    if _query(f'SELECT user_id FROM "{SPRINKLER_TABLE}" WHERE user_id = ?', [user_id]):
+        stamp = ", updated_at = datetime('now')" if "updated_at" in cols else ""
+        _execute(f'UPDATE "{SPRINKLER_TABLE}" SET sprinkler_id = ?{stamp} WHERE user_id = ?',
+                 [sprinkler_id, user_id])
+    else:
+        _execute(f'INSERT INTO "{SPRINKLER_TABLE}" (user_id, sprinkler_id) VALUES (?, ?)',
+                 [user_id, sprinkler_id])
+    return result
+
+
+def get_sprinkler_id(user_id):
+    """The sprinkler_id on the user's sprinkler_settings row, or None."""
+    try:
+        _sprinkler_cols()
+        rows = _query(f'SELECT sprinkler_id FROM "{SPRINKLER_TABLE}" WHERE user_id = ?', [user_id])
+    except LocationError:
+        return None                               # the reason was already printed to the terminal
+    return (rows[0]["sprinkler_id"] if rows else None) or None
+
+
+# --------------------------------------------------------------------------
+# Location
+# --------------------------------------------------------------------------
+
+def save_location(user_id, city, state, country, sprinkler_id=None):
+    """Validate, verify and save the user's location (one row per user).
+    If a sprinkler is chosen, it is connected to the user as well."""
     city, state, country, code = validate_location(city, state, country)
-    p = geocode(city, state, country, code)
+    if sprinkler_id is not None and sprinkler_id not in PLACEHOLDER_SPRINKLERS:
+        raise LocationError("Choose a sprinkler from the list.")
+
+    p = geocode(city, state, country, code)       # fails first on a bad place: nothing is written
     table, cols = _schema()
+
+    if sprinkler_id is not None:
+        connect_sprinkler(user_id, sprinkler_id)
 
     # Only write columns the table really has
     data = {
@@ -207,13 +293,17 @@ def save_location(user_id, city, state, country):
 
 
 def get_location(user_id):
-    """What other modules call: the user's saved location, or None."""
+    """What other modules call: the user's saved location (with sprinkler_id), or None."""
     try:
         table, _ = _schema()
         rows = _query(f'SELECT * FROM "{table}" WHERE user_id = ?', [user_id])
     except LocationError:
         return None          # the reason was already printed to the terminal
-    return rows[0] if rows else None
+    if not rows:
+        return None
+    loc = dict(rows[0])
+    loc["sprinkler_id"] = get_sprinkler_id(user_id) or ""
+    return loc
 
 
 def get_coordinates(user_id):

@@ -161,25 +161,48 @@ def day_forms(uid):
         })
     return out
 
-
 def schedule_data(uid):
-    """Plain data for the browser to work out the next run. None if nothing is saved yet."""
+    """Send schedule and sprinkler run duration to the dashboard."""
     saved = load_days(uid)
+
     if not saved:
         return None
+
     days = []
     for name in DAYS:
         r = saved.get(name)
-        days.append({"on": bool(r and r["is_enabled"]),
-                     "time": r["watering_time"] if r else DEFAULT_DAY["time"]})
-    return {"timezone": get_user_timezone(uid), "days": days}
+        days.append({
+            "on": bool(r and r["is_enabled"]),
+            "time": r["watering_time"] if r else DEFAULT_DAY["time"]
+        })
 
+    # Get run_minutes from sprinkler_settings
+    settings = query(
+        "SELECT run_minutes FROM sprinkler_settings WHERE user_id = ?",
+        [uid]
+    )
+
+    run_minutes = settings[0]["run_minutes"] if settings else 0
+
+    return {
+        "timezone": get_user_timezone(uid),
+        "days": days,
+        "runMinutes": run_minutes
+    }
 def to_int(value, default=0, maximum=10000):
     try:
         return max(0, min(int(value), maximum))
     except (TypeError, ValueError):
         return default
-
+    
+def store_run_minutes(uid, minutes):
+    """Save the run length into sprinkler_settings.run_minutes (one row per user)."""
+    if query("SELECT user_id FROM sprinkler_settings WHERE user_id = ?", [uid]):
+        execute("UPDATE sprinkler_settings SET run_minutes = ?, updated_at = datetime('now') "
+                "WHERE user_id = ?", [minutes, uid])
+    else:
+        execute("INSERT INTO sprinkler_settings (user_id, run_minutes) VALUES (?, ?)",
+                [uid, minutes])
 
 # Dashboards
 @app.route("/user/<string:user_id>/dashboard")
@@ -225,6 +248,11 @@ def schedule(user_id):
                          to_int(request.form.get(f"{day}_gallons")),
                          to_int(request.form.get(f"{day}_minutes"))))
         save_week(uid, rows)
+        run_minutes = max(
+            (minutes for day, time_str, on, gallons, minutes in rows if on),
+            default=0
+        )
+        store_run_minutes(uid, run_minutes)
         return redirect(url_for("dashboard", user_id=uid))
 
     return render_template("schedule.html", dashboard={"id": uid},
@@ -263,6 +291,7 @@ def notifications(user_id):
     flash(f"Notification for user {user_id}: {notification_data}")
     return redirect(url_for("admin"))
 
+from backend.location.location import save_location, get_location, PLACEHOLDER_SPRINKLERS
 
 @app.route("/user/<string:user_id>/location", methods=["GET", "POST"])
 @login_required
@@ -272,15 +301,17 @@ def location(user_id):
     if request.method == "POST":
         try:
             place = save_location(uid, request.form.get("city"),
-                                  request.form.get("state"), request.form.get("country"))
-        except AccountError as exc:                    # LocationError is a subclass
+                                  request.form.get("state"), request.form.get("country"),
+                                  request.form.get("sprinkler_id"))
+        except AccountError as exc:
             flash(str(exc), "error")
             typed = {"city": request.form.get("city", ""),
                      "state": request.form.get("state", ""),
-                     "country": request.form.get("country", "")}
-            return render_template("location.html", place=typed, user_id=uid)
+                     "country": request.form.get("country", ""),
+                     "sprinkler_id": request.form.get("sprinkler_id", "")}
+            return render_template("location.html", place=typed, user_id=uid,
+                                   sprinklers=PLACEHOLDER_SPRINKLERS)
 
-        # Moving location moves the watering schedule's timezone with it
         if place.get("timezone"):
             execute("UPDATE watering_schedules SET timezone = ? WHERE user_id = ?",
                     [place["timezone"], uid])
@@ -288,7 +319,8 @@ def location(user_id):
         flash("Location saved.")
         return redirect(url_for("dashboard", user_id=uid))
 
-    return render_template("location.html", location=get_location(uid), user_id=uid)
+    return render_template("location.html", location=get_location(uid), user_id=uid,
+                           sprinklers=PLACEHOLDER_SPRINKLERS)
 
 
 @app.route("/user/<string:user_id>/account", methods=["GET", "POST"])
