@@ -110,3 +110,21 @@ if __name__ == "__main__":
         print(json.dumps(get_watering_data(city, country), indent=2))
     except WeatherServiceError as exc:
         print(f"Error: {exc}")
+
+def recommend_watering(soil_moisture, forecast_rain_mm, rain_probability):
+    if soil_moisture is None:
+        return "insufficient soil moisture data"
+
+    if forecast_rain_mm is None:
+        return "insufficient forecast rain data"
+
+    if rain_probability is None:
+        return "insufficient rain probability data"
+
+    if soil_moisture >= 0.3:
+        return "don't water"
+
+    if forecast_rain_mm >= 5 or rain_probability >= 0.6:
+        return "don't water"
+
+    return "water"

@@ -14,9 +14,9 @@ from backend.notifications.notification_settings import (
     get_notification_settings,
     save_notification_settings,
 )
-from backend.location.location import save_location, get_location
+from backend.location.location import get_location as get_saved_location
 from backend.account_settings import delete_user_account, update_user_password
-
+from backend.advice.weather_service import get_watering_data, recommend_watering, WeatherServiceError
 from flask import Flask, render_template, request, redirect, session, url_for, flash
 
 app = Flask(__name__)
@@ -79,7 +79,7 @@ def logout():
 
 
 # Customize UI Key
-OPTIONS = ["Sprinkler", "Clock", "Weather", "Schedule", "Reports"]
+OPTIONS = ["Sprinkler", "Clock", "Weather", "Schedule"]
 DEFAULT_LAYOUT = {"c1": "#c5d4fb", "c2": "#177858",
                   "panels": ["Sprinkler", "Clock", "Schedule", "Reports"]}
 
@@ -230,6 +230,83 @@ def edit_dash(user_id):
                            sched_data=schedule_data(uid))
 
 
+def build_weather_card(uid):
+    """Build weather card using the user's saved D1 coordinates."""
+
+    try:
+        # Retrieve saved location from D1
+        location = get_saved_location(uid)
+
+        if not location:
+            return None
+
+        latitude = location.get("latitude")
+        longitude = location.get("longitude")
+
+        if latitude is None or longitude is None:
+            return None
+
+        # Retrieve weather using saved coordinates
+        weather = get_weather(latitude, longitude)
+
+        current = {
+            "temperature_c": weather["temperature_c"],
+            "humidity_percent": weather["humidity_percent"],
+            "precipitation_mm": weather["current_precipitation_mm"],
+            "soil_moisture": weather["soil_moisture_fraction"],
+            "observed_at": weather["observed_at"]
+        }
+
+        # Get today's forecast
+        forecast = weather["forecast"]
+
+        if not forecast:
+            return None
+
+        today = forecast[0]
+
+        soil = current["soil_moisture"]
+        rain = today["precipitation_sum"]
+
+        # API probability is 0-100; recommendation expects 0-1
+        probability_percent = today["precipitation_probability_max"]
+
+        probability = (
+            probability_percent / 100
+            if probability_percent is not None
+            else None
+        )
+
+        # Generate recommendation
+        recommendation = recommend_watering(
+            soil,
+            rain,
+            probability
+        )
+
+        # Format three-day forecast for HTML
+        forecast_display = [
+            {
+                "date": day["date"],
+                "rain_mm": day["precipitation_sum"],
+                "rain_probability": day["precipitation_probability_max"],
+                "high": day["temperature_2m_max"]
+            }
+            for day in forecast
+        ]
+
+        return {
+            "city": location.get("city", "Saved Location"),
+            "current": current,
+            "today": today,
+            "forecast": forecast_display,
+            "recommendation": recommendation
+        }
+
+    except WeatherServiceError as exc:
+        print("Weather card error:", exc)
+        return None
+    
 # Watering Schedule page
 @app.route("/user/<string:user_id>/schedule", methods=["GET", "POST"])
 @login_required

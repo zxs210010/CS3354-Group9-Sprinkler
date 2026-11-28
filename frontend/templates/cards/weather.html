@@ -1,0 +1,288 @@
+<div class="weather-card" data-weather='{{ weather_card | default(none) | tojson }}'>
+  <div class="weather-heading">
+    <div>
+      <div class="weather-title">Weather & Watering</div>
+      <div class="weather-location">Loading location...</div>
+    </div>
+    <div class="weather-icon">☀️</div>
+  </div>
+
+  <div class="weather-current">
+    <div class="weather-temperature">--°C</div>
+    <div class="weather-details">
+      <div>Humidity: <span class="weather-humidity">--</span></div>
+      <div>Rain: <span class="weather-current-rain">--</span></div>
+      <div>Soil moisture: <span class="weather-soil">--</span></div>
+    </div>
+  </div>
+
+  <div class="weather-recommendation">
+    <div class="recommendation-heading">Sprinkler Recommendation</div>
+    <div class="recommendation-result">Loading...</div>
+    <div class="recommendation-reason"></div>
+  </div>
+
+  <div class="weather-forecast">
+    <div class="forecast-heading">3-Day Forecast</div>
+    <div class="forecast-list"></div>
+  </div>
+
+  <div class="weather-updated"></div>
+</div>
+
+<style>
+.weather-card {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  container-type: inline-size;
+  padding: 5% 6%;
+  overflow-y: auto;
+  background: linear-gradient(180deg, #a5b4fc 0%, #bbf7b0 100%);
+  color: #000;
+  font-family: "Zilla Slab", "Roboto Slab", Georgia, serif;
+}
+
+.weather-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.weather-title {
+  font-size: clamp(17px, 7cqw, 38px);
+  font-weight: bold;
+}
+
+.weather-location {
+  font-size: clamp(11px, 3.5cqw, 18px);
+  opacity: .7;
+}
+
+.weather-icon {
+  font-size: clamp(28px, 11cqw, 55px);
+}
+
+.weather-current {
+  display: flex;
+  align-items: center;
+  gap: 8%;
+  margin-top: 3%;
+  padding: 3%;
+  background: rgba(255,255,255,.4);
+  border-radius: 10px;
+}
+
+.weather-temperature {
+  font-size: clamp(28px, 12cqw, 55px);
+  font-weight: bold;
+}
+
+.weather-details {
+  font-size: clamp(11px, 3.8cqw, 19px);
+  line-height: 1.65;
+}
+
+.weather-recommendation {
+  margin-top: 3%;
+  padding: 3%;
+  background: rgba(255,255,255,.55);
+  border-radius: 10px;
+}
+
+.recommendation-heading,
+.forecast-heading {
+  font-size: clamp(13px, 4.5cqw, 23px);
+  font-weight: bold;
+}
+
+.recommendation-result {
+  font-size: clamp(20px, 7cqw, 34px);
+  font-weight: bold;
+  margin-top: 1%;
+}
+
+.recommendation-result.water {
+  color: #08752c;
+}
+
+.recommendation-result.no-water {
+  color: #a12626;
+}
+
+.recommendation-result.unknown {
+  color: #765b00;
+}
+
+.recommendation-reason {
+  font-size: clamp(10px, 3.3cqw, 17px);
+  margin-top: 1%;
+  opacity: .8;
+}
+
+.weather-forecast {
+  margin-top: 3%;
+}
+
+.forecast-list {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2%;
+  margin-top: 2%;
+}
+
+.forecast-day {
+  text-align: center;
+  background: rgba(255,255,255,.5);
+  border-radius: 8px;
+  padding: 5% 2%;
+  font-size: clamp(10px, 3.3cqw, 17px);
+}
+
+.forecast-date {
+  font-weight: bold;
+}
+
+.forecast-rain {
+  margin-top: 5%;
+}
+
+.weather-updated {
+  font-size: clamp(9px, 2.7cqw, 13px);
+  opacity: .6;
+  margin-top: 3%;
+}
+
+.weather-error {
+  padding: 10px;
+  color: #a12626;
+  font-weight: bold;
+}
+</style>
+
+<script>
+if (!window.weatherCardReady) {
+  window.weatherCardReady = true;
+
+  function weatherRender() {
+    document.querySelectorAll(".weather-card:not([data-ready])")
+      .forEach(card => {
+        let data = null;
+
+        try {
+          data = JSON.parse(card.dataset.weather || "null");
+        } catch (e) {}
+
+        if (!data) {
+          card.innerHTML =
+            '<div class="weather-error">Weather data unavailable. Check your saved location.</div>';
+          card.dataset.ready = "1";
+          return;
+        }
+
+        const current = data.current;
+        const today = data.today;
+
+        card.querySelector(".weather-location").textContent =
+          data.city || "Saved location";
+
+        card.querySelector(".weather-temperature").textContent =
+          current.temperature_c != null
+            ? Number(current.temperature_c).toFixed(1) + "°C"
+            : "--°C";
+
+        card.querySelector(".weather-humidity").textContent =
+          current.humidity_percent != null
+            ? current.humidity_percent + "%"
+            : "--";
+
+        card.querySelector(".weather-current-rain").textContent =
+          current.precipitation_mm != null
+            ? current.precipitation_mm + " mm"
+            : "--";
+
+        card.querySelector(".weather-soil").textContent =
+          current.soil_moisture != null
+            ? (current.soil_moisture * 100).toFixed(1) + "%"
+            : "--";
+
+        const recommendation =
+          card.querySelector(".recommendation-result");
+
+        const reason =
+          card.querySelector(".recommendation-reason");
+
+        const result = data.recommendation;
+
+        if (result === "water") {
+          recommendation.textContent = "💧 WATER";
+          recommendation.className =
+            "recommendation-result water";
+
+          reason.textContent =
+            "Soil moisture is low and significant rain is not expected.";
+        } else if (result === "don't water") {
+          recommendation.textContent = "✓ DON'T WATER";
+          recommendation.className =
+            "recommendation-result no-water";
+
+          if (current.soil_moisture >= 0.3) {
+            reason.textContent =
+              "Soil moisture is already sufficient.";
+          } else {
+            reason.textContent =
+              "Rainfall or rain probability is high enough to postpone watering.";
+          }
+        } else {
+          recommendation.textContent = "DATA UNAVAILABLE";
+          recommendation.className =
+            "recommendation-result unknown";
+
+          reason.textContent = result;
+        }
+
+        const forecastList =
+          card.querySelector(".forecast-list");
+
+        (data.forecast || []).forEach(day => {
+          const item = document.createElement("div");
+          item.className = "forecast-day";
+
+          const date = document.createElement("div");
+          date.className = "forecast-date";
+          date.textContent = day.date;
+
+          const rain = document.createElement("div");
+          rain.className = "forecast-rain";
+          rain.textContent =
+            "Rain: " +
+            (day.rain_mm != null
+              ? Number(day.rain_mm).toFixed(1) + " mm"
+              : "--");
+
+          const chance = document.createElement("div");
+          chance.textContent =
+            "Chance: " +
+            (day.rain_probability != null
+              ? day.rain_probability + "%"
+              : "--");
+
+          const high = document.createElement("div");
+          high.textContent =
+            "High: " +
+            (day.high != null ? day.high + "°C" : "--");
+
+          item.append(date, rain, chance, high);
+          forecastList.appendChild(item);
+        });
+
+        card.querySelector(".weather-updated").textContent =
+          "Weather observed: " + (current.observed_at || "Unknown");
+
+        card.dataset.ready = "1";
+      });
+  }
+
+  weatherRender();
+}
+</script>
