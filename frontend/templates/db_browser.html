@@ -1,0 +1,94 @@
+<!doctype html>
+{% set c1 = layout.c1 if layout is defined and layout and layout.c1 else '#c5d4fb' %}
+{% set c2 = layout.c2 if layout is defined and layout and layout.c2 else '#177858' %}
+{% set is_standalone = standalone_db is defined and standalone_db %}
+{% set uid = profile.id if profile is defined and profile and profile.id is defined else user_id %}
+<html lang="en" style="--c1: {{ c1 }}; --c2: {{ c2 }};">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Database Browser</title>
+<style>
+    :root { --c1: #c5d4fb; --c2: #177858;
+            --bg: linear-gradient(135deg, var(--c1), var(--c2)); }
+    body { margin: 0; background: #ba5555; display: flex; justify-content: center;
+           min-height: 100vh; min-height: 100dvh; overflow-x: hidden; font-family: system-ui, sans-serif; }
+    .screen { width: 100%; min-height: 100vh; min-height: 100dvh;
+              padding: 2vh 30px 4vh; box-sizing: border-box;
+              display: flex; flex-direction: column; align-items: center;
+              background: var(--bg); }
+    .logo { display: block; height: 12vh; width: auto; margin: 0 auto 2vh; flex: none; }
+
+    .browser-wrap { width: 100%; max-width: 980px; display: flex; flex-direction: column; gap: 18px; }
+    .panel { background: #d9d9d9; width: 100%; padding: 22px 24px; box-sizing: border-box;
+             display: flex; flex-direction: column; gap: 14px; }
+    .panel h1 { margin: 0; text-align: center; font-size: 28px; color: #000; }
+    .panel h2 { margin: 0; font-size: 20px; color: #000; }
+
+    .msg { background: #fff; color: #1f6b4a; border-radius: 8px; padding: 10px 14px; font-size: 14px; font-weight: 600; }
+    .msg.err { color: #9b1c1c; }
+
+    .table-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+    .table-btn { padding: 10px 14px; border-radius: 8px; border: none;
+                 background: #000; color: #fff; text-decoration: none;
+                 font-size: 14px; font-weight: 600; cursor: pointer; transition: opacity .2s ease; }
+    .table-btn:hover { opacity: 0.85; }
+    .table-btn.active { background: var(--c2); color: #fff; }
+
+    .table-scroll { width: 100%; overflow-x: auto; background: #fff; border-radius: 8px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; color: #111; }
+    th, td { padding: 9px 12px; border-bottom: 1px solid #d9d9d9; text-align: left; white-space: nowrap; }
+    th { background: #eee; font-weight: 700; }
+    .empty { padding: 16px; margin: 0; color: #333; font-size: 15px; }
+</style>
+</head>
+<body>
+    <div class="screen">
+        <img class="logo" src="{{ url_for('static', filename='aquathinklogo.png') }}" alt="Aqua think">
+        <div class="browser-wrap">
+            <div class="panel">
+                <h1>Database Tables</h1>
+                {% for m in get_flashed_messages() %}
+                <div class="msg err">{{ m }}</div>
+                {% endfor %}
+                <div class="table-grid">
+                    {% for t in tables %}
+                    <a class="table-btn {{ 'active' if selected == t else '' }}"
+                       href="{{ url_for('db_browser', table=t) if is_standalone else url_for('db_browser', user_id=uid, table=t) }}">{{ t }}</a>
+                    {% endfor %}
+                </div>
+            </div>
+
+            {% if result is not none %}
+            <div class="panel">
+                <h2>{{ result.table }} ({{ result.rows | length }} rows)</h2>
+                {% if result.rows %}
+                <div class="table-scroll">
+                    <table>
+                        <thead>
+                            <tr>
+                                {% for col in result.columns %}
+                                <th>{{ col }}</th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in result.rows %}
+                            <tr>
+                                {% for col in result.columns %}
+                                <td>{{ row[col] }}</td>
+                                {% endfor %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="empty">No rows in {{ result.table }}.</p>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>
